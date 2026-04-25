@@ -1,0 +1,309 @@
+/* ═══════════════════════════════════════════
+   FORGESOLVE — Design System
+   Clean, intentional, production-ready
+   ═══════════════════════════════════════════ */
+:root {
+  /* Surfaces */
+  --bg:          #0f1419;
+  --bg-card:     #14191f;
+  --bg-el:       #1a1f2e;
+  --bg-hover:    #20262f;
+  --bg-press:    #252d38;
+
+  /* Borders */
+  --b0: #1a1f2e;
+  --b1: #23293a;
+  --b2: #2d3544;
+  --b3: #3a4455;
+
+  /* Text */
+  --t1: #e0e1e6;
+  --t2: #8a8f9e;
+  --t3: #5a6370;
+  --t4: #3a3f47;
+
+  /* Primary Accent */
+  --primary:     #00d9ff;
+  --primary-dim: #00d9ff08;
+  --primary-bg:  #00d9ff12;
+
+  /* Semantic Colors */
+  --red:         #ef4444;
+  --red-bg:      #ef444412;
+  --green:       #10b981;
+  --green-bg:    #10b98112;
+  --blue:        #3b82f6;
+  --blue-bg:     #3b82f612;
+  --yellow:      #eab308;
+  --yellow-bg:   #eab30812;
+  --orange:      #f59e0b;
+  --orange-bg:   #f59e0b12;
+  --purple:      #a78bfa;
+  --purple-bg:   #a78bfa12;
+
+  /* Status aliases */
+  --success:     #10b981;
+  --success-bg:  #10b98110;
+  --error:       #ef4444;
+  --error-bg:    #ef444410;
+  --warning:     #f59e0b;
+  --warning-bg:  #f59e0b10;
+  --info:        #3b82f6;
+  --info-bg:     #3b82f610;
+
+  /* Typography */
+  --font: 'Inter', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+
+/* ── Reset ──────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; background: var(--bg); }
+body {
+  font-family: var(--font);
+  color: var(--t1);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+}
+#root { height: 100%; display: flex; flex-direction: column; }
+
+/* ── Scrollbar ─────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--b2); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+::selection { background: var(--primary-bg); color: var(--primary); }
+
+/* ── Animations ────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes shimmer {
+  0%   { background-position: -500px 0; }
+  100% { background-position:  500px 0; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes barGrow {
+  from { transform: scaleY(0); opacity: 0; }
+  to   { transform: scaleY(1); opacity: 1; }
+}
+@keyframes panelSwitch {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes sidebarIn {
+  from { opacity: 0; transform: translateX(-20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Animation utilities */
+.anim-up    { animation: fadeUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.anim-in    { animation: fadeIn 0.25s ease both; }
+.anim-scale { animation: scaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.anim-spin  { animation: spin 0.75s linear infinite; }
+.anim-float { animation: float 3s ease-in-out infinite; }
+.panel-in   { animation: panelSwitch 0.25s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.sidebar-anim { animation: sidebarIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.bar-grow   { transform-origin: bottom; animation: barGrow 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* ── Skeleton shimmer ──────────────── */
+.skel {
+  background: linear-gradient(90deg, var(--bg-card) 0%, var(--bg-el) 50%, var(--bg-card) 100%);
+  background-size: 500px 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+/* ── Mono label ────────────────────── */
+.lbl {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--t3);
+  transition: color 0.2s ease;
+}
+
+/* ── Input ─────────────────────────── */
+.pp-input {
+  width: 100%;
+  background: var(--bg-el);
+  border: 1px solid var(--b1);
+  border-radius: 6px;
+  padding: 8px 11px;
+  font-size: 13px;
+  font-family: var(--mono);
+  color: var(--t1);
+  outline: none;
+  transition: all 0.15s ease;
+  caret-color: var(--primary);
+}
+.pp-input::placeholder { color: var(--t3); }
+.pp-input:focus { border-color: var(--primary); background: var(--bg-hover); }
+.pp-input.err { border-color: var(--error); }
+.pp-input.err:focus { border-color: var(--error); background: var(--bg-hover); }
+.pp-input:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Tag chip ──────────────────────── */
+.pp-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  white-space: nowrap;
+  font-size: 11px;
+  font-family: var(--mono);
+  font-weight: 600;
+  border: 1px solid var(--b2);
+  background: var(--bg-el);
+  color: var(--t2);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.12s ease;
+}
+.pp-tag:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--bg-hover);
+}
+.pp-tag.on {
+  border-color: var(--primary);
+  background: var(--primary-bg);
+  color: var(--primary);
+}
+
+/* ── Nav item ──────────────────────── */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  border: 1px solid transparent;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--t2);
+  user-select: none;
+  position: relative;
+}
+.nav-item:hover { background: var(--bg-el); color: var(--t1); }
+.nav-item.active {
+  background: var(--primary-bg);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+/* ── Nav divider ───────────────────── */
+.nav-divider {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--t3);
+  padding: 13px 14px 5px;
+  margin-top: 4px;
+}
+
+/* ── Stats card ────────────────────── */
+.stat-card {
+  background: var(--bg-el);
+  border: 1px solid var(--b1);
+  border-radius: 8px;
+  padding: 14px 16px;
+  transition: all 0.12s ease;
+}
+.stat-card:hover { border-color: var(--primary); background: var(--bg-hover); }
+
+/* ── Rank badge colours ────────────── */
+.rank-newbie     { color: #808080; }
+.rank-pupil      { color: #00d084; }
+.rank-specialist { color: #03a89e; }
+.rank-expert     { color: #0000ff; }
+.rank-cm         { color: #aa00aa; }
+.rank-master     { color: #ff8c00; }
+.rank-im         { color: #ff8c00; }
+.rank-gm         { color: #ff0000; }
+.rank-lgm        { color: #ff0000; }
+
+/* ── Tooltip ───────────────────────── */
+.pp-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-card);
+  border: 1px solid var(--b1);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--t2);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 99;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Progress ring ─────────────────── */
+.progress-ring { transition: stroke-dasharray 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* ── Button base ───────────────────── */
+button, a.btn {
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+}
+button:active, a.btn:active { transform: scale(0.98); }
+
+/* ── Loading spinner ───────────────── */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2.5px solid var(--b2);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
