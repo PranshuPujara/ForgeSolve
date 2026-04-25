@@ -40,17 +40,13 @@ const useReady = (platform, minRating, maxRating, difficulty) => {
 
 /* ── Logo — clean geometric mark ───────────────── */
 const Logo = ({ size = 28 }) => (
-  <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
-    <defs>
-      <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" style={{ stopColor: '#00d9ff', stopOpacity: 1 }} />
-        <stop offset="100%" style={{ stopColor: '#0090ff', stopOpacity: 1 }} />
-      </linearGradient>
-    </defs>
-    <rect width="32" height="32" rx="10" fill="url(#logoGrad)" />
-    <path d="M16 7L8 11.5v9L16 25l8-4.5v-9L16 7z" fill="none" stroke="#000" strokeWidth="2.2" strokeLinejoin="round" />
-    <path d="M16 7v18M8 11.5l8 4.5 8-4.5" stroke="#000" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
-  </svg>
+  <img
+    src="/SolveForge_logo.png"
+    alt="SolveForge logo"
+    width={size}
+    height={size}
+    style={{ borderRadius: Math.max(8, Math.floor(size * 0.22)), objectFit: 'cover' }}
+  />
 );
 
 /* ── Loading skeleton ────────────────────────────── */
@@ -557,22 +553,28 @@ export default function App() {
 
           {/* Footer */}
           <footer style={{
-            borderTop: '1px solid var(--b0)', padding: '16px 28px', marginTop: 'auto',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            fontSize: 11, color: 'var(--t3)', fontFamily: 'var(--mono)',
-            background: 'var(--bg)',
-            fontWeight: 600
+            borderTop: '1px solid var(--b0)', padding: '14px 28px', marginTop: 'auto',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16,
+            fontSize: 12, color: 'var(--t3)', fontFamily: 'var(--mono)',
+            background: 'var(--bg)'
           }}>
-            <span>ForgeSolve · competitive problem discovery</span>
-            <div style={{ display: 'flex', gap: 16 }}>
-              {[['CF API', 'https://codeforces.com/api/help'], ['LeetCode', 'https://leetcode.com'], ['GFG', 'https://geeksforgeeks.org']].map(([l, h]) => (
-                <a key={l} href={h} target="_blank" rel="noopener noreferrer"
-                  style={{ color: 'inherit', textDecoration: 'none', transition: 'all .2s', position: 'relative' }}
-                  onMouseEnter={e => { e.currentTarget.style.color = 'var(--primary)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--t3)'; }}
-                >{l}</a>
-              ))}
-            </div>
+            <span>© 2026 Pranshu. All rights reserved.</span>
+            <a
+              href="https://www.linkedin.com/in/pranshu-pujara-2a0564376/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'inherit', textDecoration: 'none' }}
+            >
+              <span>LinkedIn</span>
+            </a>
+            <a
+              href="https://github.com/PranshuPujara"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'inherit', textDecoration: 'none' }}
+            >
+              <span>GitHub</span>
+            </a>
           </footer>
         </main>
       </div>
