@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, memo, useMemo } from 'react';
 import { Zap, Menu, X, Compass, User, History, CalendarDays, AlertCircle, ChevronDown } from 'lucide-react';
 import { storage, getLastRating } from './utils/localStorage';
 import { useProblemPicker } from './hooks/useProblemPicker';
@@ -49,32 +49,8 @@ const Logo = ({ size = 28 }) => (
   />
 );
 
-/* ── Loading skeleton ────────────────────────────── */
-const Skeleton = () => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingTop: 8, animation: 'fadeUp 0.35s ease both' }}>
-    <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 12 }}>
-      <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid var(--b1)', borderTopColor: 'var(--primary)', animation: 'spin 0.8s linear infinite' }} />
-    </div>
-    <div style={{ borderRadius: 14, overflow: 'hidden', background: 'var(--bg-card)', border: '1.5px solid var(--b1)' }}>
-      <div className="skel" style={{ height: 3, borderRadius: 0, background: 'var(--primary-bg)' }} />
-      <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 15 }}>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <div className="skel" style={{ height: 20, width: 92 }} />
-          <div className="skel" style={{ height: 20, width: 68 }} />
-        </div>
-        <div className="skel" style={{ height: 28, width: '75%', borderRadius: 7 }} />
-        <div className="skel" style={{ height: 14, width: '48%', borderRadius: 5 }} />
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {[68, 88, 58, 82, 64].map(w => <div key={w} className="skel" style={{ height: 20, width: w, borderRadius: 6 }} />)}
-        </div>
-        <div className="skel" style={{ height: 48, width: '100%', borderRadius: 10, marginTop: 6 }} />
-      </div>
-    </div>
-  </div>
-);
-
 /* ── Collapsible sidebar section ─────────────────── */
-const Section = ({ title, children, badge, icon: Icon, defaultOpen = true }) => {
+const Section = memo(({ title, children, badge, icon: Icon, defaultOpen = true }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div style={{ borderBottom: '1px solid var(--b0)', transition: 'all 0.2s ease' }}>
@@ -104,7 +80,31 @@ const Section = ({ title, children, badge, icon: Icon, defaultOpen = true }) => 
       {open && <div style={{ paddingBottom: 15, animation: 'slideDown 0.25s ease both' }}>{children}</div>}
     </div>
   );
-};
+});
+
+/* ── Loading skeleton ────────────────────────────── */
+const Skeleton = () => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingTop: 8, animation: 'fadeUp 0.35s ease both' }}>
+    <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 12 }}>
+      <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid var(--b1)', borderTopColor: 'var(--primary)', animation: 'spin 0.8s linear infinite' }} />
+    </div>
+    <div style={{ borderRadius: 14, overflow: 'hidden', background: 'var(--bg-card)', border: '1.5px solid var(--b1)' }}>
+      <div className="skel" style={{ height: 3, borderRadius: 0, background: 'var(--primary-bg)' }} />
+      <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 15 }}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div className="skel" style={{ height: 20, width: 92 }} />
+          <div className="skel" style={{ height: 20, width: 68 }} />
+        </div>
+        <div className="skel" style={{ height: 28, width: '75%', borderRadius: 7 }} />
+        <div className="skel" style={{ height: 14, width: '48%', borderRadius: 5 }} />
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {[68, 88, 58, 82, 64].map(w => <div key={w} className="skel" style={{ height: 20, width: w, borderRadius: 6 }} />)}
+        </div>
+        <div className="skel" style={{ height: 48, width: '100%', borderRadius: 10, marginTop: 6 }} />
+      </div>
+    </div>
+  </div>
+);
 
 /* ═════════════════════════════════════════════════
    APP
@@ -175,12 +175,12 @@ export default function App() {
     return () => window.removeEventListener('keydown', fn);
   }, [handlePick, ready, loading]);
 
-  // Scroll main back to top when panel switches
-  const switchPanel = (p) => {
+  // Scroll main back to top when panel switches — stable reference via useCallback
+  const switchPanel = useCallback((p) => {
     setActivePanel(p);
     if (mainRef.current) mainRef.current.scrollTop = 0;
     setMobileOpen(false);
-  };
+  }, []);
 
   const hasFriends = friends.length > 0 && platform === 'codeforces';
   const diffBadge = platform === 'codeforces'
@@ -192,8 +192,8 @@ export default function App() {
       ? (platform === 'codeforces' ? 'Set a valid rating range' : 'Pick a difficulty')
       : null;
 
-  /* ── Sidebar filter content ──────────────────── */
-  const FilterContent = () => (
+  /* ── Sidebar filter content — rendered as JSX, not as a component type ── */
+  const filterContentJSX = (
     <div style={{ padding: '0 18px 24px' }}>
       <Section title="Platform">
         <PlatformSelector value={platform} onChange={changePlatform} />
@@ -231,8 +231,8 @@ export default function App() {
     </div>
   );
 
-  /* ── Sidebar ─────────────────────────────────── */
-  const Sidebar = () => (
+  /* ── Sidebar — rendered as stable JSX inline, never as a dynamic component type ── */
+  const sidebarJSX = (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }} className="sidebar-anim">
 
       {/* Brand */}
@@ -289,30 +289,28 @@ export default function App() {
         ))}
       </nav>
 
-      {/* Scrollable section content */}
+      {/* Scrollable section content — use visibility toggling so components stay mounted */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {activePanel === 'discover' && <FilterContent />}
+        <div style={{ display: activePanel === 'discover' ? 'block' : 'none' }}>
+          {filterContentJSX}
+        </div>
 
-        {activePanel === 'profile' && (
-          <div style={{ padding: '0 18px 24px' }}>
-            <div style={{ paddingTop: 4, paddingBottom: 14 }}>
-              <HandlePanel
-                hook={userHandle}
-                excludeSolved={excludeSolved} onExcludeChange={setExcludeSolved}
-                showOnlySolved={showOnlySolved} onShowOnlyChange={setShowOnlySolved}
-                variant="sidebar"
-              />
-            </div>
+        <div style={{ display: activePanel === 'profile' ? 'block' : 'none', padding: '0 18px 24px' }}>
+          <div style={{ paddingTop: 4, paddingBottom: 14 }}>
+            <HandlePanel
+              hook={userHandle}
+              excludeSolved={excludeSolved} onExcludeChange={setExcludeSolved}
+              showOnlySolved={showOnlySolved} onShowOnlyChange={setShowOnlySolved}
+              variant="sidebar"
+            />
           </div>
-        )}
+        </div>
 
-        {activePanel === 'history' && (
-          <div style={{ padding: '0 18px 24px' }}>
-            <div style={{ paddingTop: 4 }}>
-              <HistoryPanel onClear={() => setHistKey(k => k + 1)} />
-            </div>
+        <div style={{ display: activePanel === 'history' ? 'block' : 'none', padding: '0 18px 24px' }}>
+          <div style={{ paddingTop: 4 }}>
+            <HistoryPanel onClear={() => setHistKey(k => k + 1)} />
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -399,7 +397,7 @@ export default function App() {
           height: '100%', overflowY: 'auto',
           transition: 'transform .3s cubic-bezier(.16,1,.3,1)',
         }}>
-          <Sidebar />
+          {sidebarJSX}
         </aside>
 
         {/* Main content */}
