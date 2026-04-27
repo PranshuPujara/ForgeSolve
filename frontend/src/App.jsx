@@ -308,7 +308,7 @@ export default function App() {
       </nav>
 
       {/* Scrollable section content — use visibility toggling so components stay mounted */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '20px' }}>
         <div style={{ display: activePanel === 'discover' ? 'block' : 'none' }}>
           {filterContentJSX}
         </div>
@@ -325,7 +325,7 @@ export default function App() {
         </div>
 
         <div style={{ display: activePanel === 'history' ? 'block' : 'none', padding: '0 18px 24px' }}>
-          <div style={{ paddingTop: 4 }}>
+          <div style={{ paddingTop: 4, paddingBottom: '12px' }}>
             <HistoryPanel onClear={() => setHistKey(k => k + 1)} onReattempt={handleReattempt} />
           </div>
         </div>
@@ -362,7 +362,7 @@ export default function App() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {/* Active handle pill in topbar */}
+          {/* Active handle pill in topbar — hidden on mobile */}
           {userHandle.status === 'ok' && (
             <button type="button"
               onClick={() => { if (typeof switchPanel === 'function') switchPanel('profile'); else setActivePanel('profile'); }}
@@ -374,7 +374,7 @@ export default function App() {
                 color: activePanel === 'profile' ? 'var(--primary)' : 'var(--t1)',
                 transition: 'all .2s cubic-bezier(0.16, 1, 0.3, 1)',
                 fontWeight: 800,
-                boxShadow: activePanel === 'profile' ? '0 4px 12px rgba(0, 217, 255, 0.15)' : '0 2px 5px rgba(0,0,0,0.2)'
+                boxShadow: activePanel === 'profile' ? '0 4px 12px rgba(0, 217, 255, 0.15)' : '0 2px 5px rgba(0,0,0,0.2)',
               }}
               onMouseEnter={e => { if (activePanel !== 'profile') { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)'; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 217, 255, 0.15)'; } }}
               onMouseLeave={e => { if (activePanel !== 'profile') { e.currentTarget.style.borderColor = 'var(--b1)'; e.currentTarget.style.color = 'var(--t1)'; e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)'; } }}
@@ -390,7 +390,7 @@ export default function App() {
             </button>
           )}
           <StreakBadge />
-          {/* Mobile toggle */}
+          {/* Mobile toggle — always accessible */}
           <button type="button" id="mob-toggle" onClick={() => setMobileOpen(v => !v)}
             style={{
               display: 'none', padding: '6px 13px', borderRadius: 8, cursor: 'pointer',
@@ -628,6 +628,8 @@ export default function App() {
       <style>{`
         @media(max-width:768px){
           #mob-toggle{display:flex!important}
+          /* Hide profile pill on mobile to prevent menu button from being squeezed */
+          header div:last-child button:not(#mob-toggle){display:none!important}
           #sidebar{
             position:fixed!important;top:50px!important;left:0!important;bottom:0!important;
             z-index:45!important;width:340px!important;
