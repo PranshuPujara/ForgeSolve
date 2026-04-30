@@ -352,14 +352,23 @@ export default function App() {
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
         zIndex: 50,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+        <button
+          type="button"
+          onClick={() => setMobileOpen(true)}
+          title="Open menu"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 11,
+            background: 'transparent', border: 'none', padding: 0,
+            cursor: 'pointer', minWidth: 0,
+          }}
+        >
           <Logo size={26} />
           <span style={{ fontSize: 16, fontWeight: 900, letterSpacing: '-.04em', color: 'var(--primary)' }}>ForgeSolve</span>
           <span style={{
             fontSize: 10, fontFamily: 'var(--mono)', padding: '2px 7px', borderRadius: 5,
             background: 'var(--primary-bg)', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 700
           }}>beta</span>
-        </div>
+        </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {/* Active handle pill in topbar — hidden on mobile */}
