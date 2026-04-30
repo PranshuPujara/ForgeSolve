@@ -182,7 +182,8 @@ export default function App() {
   const switchPanel = useCallback((p) => {
     setActivePanel(p);
     if (mainRef.current) mainRef.current.scrollTop = 0;
-    setMobileOpen(false);
+    // Keep sidebar open on mobile — let user close it manually with menu button
+    // This allows smooth navigation between Discover, Profile, and History without sidebar closing
   }, []);
 
   // ── Re-attempt: switch to Discover, show banner, fetch the specific problem ──
@@ -428,7 +429,10 @@ export default function App() {
         </aside>
 
         {/* Main content */}
-        <main ref={mainRef} style={{ flex: 1, height: '100%', overflowY: 'auto', overflowX: 'hidden', background: 'var(--bg)' }}>
+        <main ref={mainRef} 
+          onClick={() => mobileOpen && setMobileOpen(false)}
+          style={{ flex: 1, height: '100%', overflowY: 'auto', overflowX: 'hidden', background: 'var(--bg)', cursor: mobileOpen ? 'pointer' : 'default' }}
+        >
           <div style={{
             maxWidth: 680, width: '100%', margin: '0 auto',
             padding: '32px 28px 56px',
