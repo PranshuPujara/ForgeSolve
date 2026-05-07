@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, memo, useMemo } from 'react';
-import { Zap, Menu, X, Compass, User, History, CalendarDays, AlertCircle, ChevronDown, Swords } from 'lucide-react';
+import { Zap, Menu, X, Compass, User, History, CalendarDays, AlertCircle, ChevronDown, Swords, SlidersHorizontal, Heart } from 'lucide-react';
 import { storage, getLastRating } from './utils/localStorage';
 import { useProblemPicker } from './hooks/useProblemPicker';
 import { useUserHandle } from './hooks/useUserHandle';
@@ -47,6 +47,17 @@ const Logo = ({ size = 28 }) => (
     height={size}
     style={{ borderRadius: Math.max(8, Math.floor(size * 0.22)), objectFit: 'cover' }}
   />
+);
+
+const GithubMark = ({ size = 14 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56v-1.96c-3.2.7-3.87-1.54-3.87-1.54-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.76 2.69 1.25 3.34.96.1-.74.4-1.25.72-1.54-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.21-1.49 3.18-1.18 3.18-1.18.62 1.59.23 2.76.11 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.7 5.41-5.27 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/>
+  </svg>
+);
+const LinkedinMark = ({ size = 14 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.95v5.66H9.36V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.72v20.56C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.72V1.72C24 .77 23.2 0 22.22 0z"/>
+  </svg>
 );
 
 /* ── Collapsible sidebar section ─────────────────── */
@@ -254,8 +265,29 @@ export default function App() {
   const sidebarJSX = (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }} className="sidebar-anim">
 
-      {/* Brand */}
-      <div style={{ padding: '20px 18px 16px', borderBottom: '1px solid var(--b0)', flexShrink: 0 }}>
+      {/* Mobile-only drawer header — clear context when drawer is opened on phones */}
+      <div className="drawer-mobile-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+          <SlidersHorizontal size={16} strokeWidth={2} color="var(--primary)" />
+          <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--t1)', letterSpacing: '-.01em' }}>Filters</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setMobileOpen(false)}
+          aria-label="Close filters"
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 36, height: 36, borderRadius: 10,
+            background: 'var(--bg-el)', border: '1px solid var(--b1)',
+            color: 'var(--t2)', cursor: 'pointer', transition: 'all .15s ease',
+          }}
+        >
+          <X size={16} strokeWidth={2} />
+        </button>
+      </div>
+
+      {/* Brand — hidden on mobile (drawer header replaces it) */}
+      <div className="sidebar-brand-block" style={{ padding: '20px 18px 16px', borderBottom: '1px solid var(--b0)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Logo size={36} />
           <div>
@@ -269,8 +301,8 @@ export default function App() {
         </div>
       </div>
 
-      {/* Nav */}
-      <nav style={{ padding: '12px 10px 6px', flexShrink: 0, borderBottom: '1px solid var(--b0)' }}>
+      {/* Nav — hidden on mobile (bottom tab bar handles primary nav) */}
+      <nav className="sidebar-nav-block" style={{ padding: '12px 10px 6px', flexShrink: 0, borderBottom: '1px solid var(--b0)' }}>
         <div className="nav-divider">Navigate</div>
         {[
           { id: 'discover', label: 'Discover', Icon: Compass },
@@ -314,7 +346,7 @@ export default function App() {
           {filterContentJSX}
         </div>
 
-        <div style={{ display: activePanel === 'profile' ? 'block' : 'none', padding: '0 18px 24px' }}>
+        <div className="hide-on-mobile" style={{ display: activePanel === 'profile' ? 'block' : 'none', padding: '0 18px 24px' }}>
           <div style={{ paddingTop: 4, paddingBottom: 14 }}>
             <HandlePanel
               hook={userHandle}
@@ -325,7 +357,7 @@ export default function App() {
           </div>
         </div>
 
-        <div style={{ display: activePanel === 'history' ? 'block' : 'none', padding: '0 18px 24px' }}>
+        <div className="hide-on-mobile" style={{ display: activePanel === 'history' ? 'block' : 'none', padding: '0 18px 24px' }}>
           <div style={{ paddingTop: 4, paddingBottom: '12px' }}>
             <HistoryPanel onClear={() => setHistKey(k => k + 1)} onReattempt={handleReattempt} />
           </div>
@@ -355,8 +387,13 @@ export default function App() {
       }}>
         <button
           type="button"
-          onClick={() => setMobileOpen(true)}
-          title="Open menu"
+          onClick={() => {
+            // From Profile/History → return to Discover and open the sidebar/drawer.
+            // From Discover → just toggle the sidebar/drawer.
+            if (activePanel !== 'discover') switchPanel('discover');
+            setMobileOpen(true);
+          }}
+          title="Go to Discover"
           style={{
             display: 'flex', alignItems: 'center', gap: 11,
             background: 'transparent', border: 'none', padding: 0,
@@ -375,9 +412,10 @@ export default function App() {
           {/* Active handle pill in topbar — hidden on mobile */}
           {userHandle.status === 'ok' && (
             <button type="button"
+              className="hide-on-mobile"
               onClick={() => { if (typeof switchPanel === 'function') switchPanel('profile'); else setActivePanel('profile'); }}
               style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: '7px 16px',
+                alignItems: 'center', gap: 10, padding: '7px 16px',
                 borderRadius: 12, fontSize: 13, fontFamily: 'var(--mono)', cursor: 'pointer',
                 background: activePanel === 'profile' ? 'var(--primary-bg)' : 'var(--bg-el)',
                 border: `1px solid ${activePanel === 'profile' ? 'var(--primary)' : 'var(--b1)'}`,
@@ -400,38 +438,65 @@ export default function App() {
             </button>
           )}
           <StreakBadge />
-          {/* Mobile toggle — always accessible */}
-          <button type="button" id="mob-toggle" onClick={() => setMobileOpen(v => !v)}
+          {/* Mobile toggle — visible on Discover panel only (filters live there) */}
+          <button
+            type="button"
+            id="mob-toggle"
+            className={activePanel === 'discover' ? '' : 'hidden-mobile-toggle'}
+            onClick={() => setMobileOpen(v => !v)}
+            aria-label={mobileOpen ? 'Close filters' : 'Open filters'}
             style={{
-              display: 'none', padding: '6px 13px', borderRadius: 8, cursor: 'pointer',
+              display: 'none', alignItems: 'center', gap: 6,
+              minHeight: 40, minWidth: 44,
+              padding: '8px 13px', borderRadius: 10, cursor: 'pointer',
               background: mobileOpen ? 'var(--primary-bg)' : 'var(--bg-el)',
               border: `1px solid ${mobileOpen ? 'var(--primary)' : 'var(--b1)'}`,
               color: mobileOpen ? 'var(--primary)' : 'var(--t2)',
               fontSize: 12, fontFamily: 'var(--mono)', fontWeight: 700,
               transition: 'all .15s',
             }}
-          >{mobileOpen ? <><X size={16} strokeWidth={2} /> close</> : <><Menu size={16} strokeWidth={2} /> menu</>}</button>
+          >{mobileOpen
+            ? <><X size={17} strokeWidth={2} /> close</>
+            : <><SlidersHorizontal size={16} strokeWidth={2} /> filters</>
+          }</button>
         </div>
       </header>
 
       {/* BODY */}
-      <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', position: 'relative' }}>
+
+        {/* Mobile scrim — visual backdrop behind drawer */}
+        <div
+          className={`mob-scrim ${mobileOpen ? 'open' : ''}`}
+          onClick={() => setMobileOpen(false)}
+          aria-hidden="true"
+        />
 
         {/* Sidebar */}
-        <aside id="sidebar" style={{
-          width: 380, flexShrink: 0,
-          borderRight: '1px solid var(--b0)',
-          background: 'var(--bg)',
-          height: '100%', overflowY: 'auto',
-          transition: 'transform .3s cubic-bezier(.16,1,.3,1)',
-        }}>
+        <aside id="sidebar"
+          onClick={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
+          style={{
+            width: 380, flexShrink: 0,
+            borderRight: '1px solid var(--b0)',
+            background: 'var(--bg)',
+            height: '100%', overflowY: 'auto',
+            transition: 'transform .3s cubic-bezier(.16,1,.3,1)',
+            WebkitTouchCallout: 'none',
+            WebkitUserSelect: 'none',
+          }}>
           {sidebarJSX}
         </aside>
 
         {/* Main content */}
-        <main ref={mainRef} 
-          onClick={() => mobileOpen && setMobileOpen(false)}
-          style={{ flex: 1, height: '100%', overflowY: 'auto', overflowX: 'hidden', background: 'var(--bg)', cursor: mobileOpen ? 'pointer' : 'default' }}
+        <main ref={mainRef}
+          className="main-pad-mobile"
+          style={{
+            flex: 1, height: '100%', overflowY: 'auto', overflowX: 'hidden',
+            background: 'var(--bg)',
+            WebkitTapHighlightColor: 'transparent',
+            WebkitUserSelect: 'none',
+          }}
         >
           <div style={{
             maxWidth: 680, width: '100%', margin: '0 auto',
@@ -495,10 +560,10 @@ export default function App() {
 
                 {/* CTA */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-                  <div style={{ display: 'flex', gap: 9 }}>
+                  <div className="cta-row" style={{ display: 'flex', gap: 9 }}>
                     <button type="button" onClick={handlePick} disabled={!ready || loading}
                       style={{
-                        flex: 1, padding: '12px 0', borderRadius: 8, cursor: 'pointer', border: 'none',
+                        flex: 1, minHeight: 44, padding: '12px 0', borderRadius: 8, cursor: 'pointer', border: 'none',
                         background: ready ? 'var(--primary)' : 'var(--bg-el)',
                         color: ready ? '#000' : 'var(--t3)', fontSize: 15, fontWeight: 900, letterSpacing: '-.02em',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
@@ -518,13 +583,14 @@ export default function App() {
                       }
                     </button>
                     <button type="button" onClick={handleDaily} disabled={!ready || loading}
+                      className="cta-secondary"
                       style={{
-                        padding: '12px 18px', borderRadius: 8, cursor: 'pointer', flexShrink: 0,
+                        minHeight: 44, padding: '12px 18px', borderRadius: 8, cursor: 'pointer', flexShrink: 0,
                         background: 'var(--bg-el)',
                         border: '1px solid var(--b1)',
                         color: 'var(--t2)', fontSize: 13, fontWeight: 600,
                         opacity: (!ready || loading) ? .5 : 1, transition: 'all .15s ease',
-                        display: 'flex', alignItems: 'center', gap: 7,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
                         position: 'relative',
                         overflow: 'hidden',
                       }}
@@ -609,36 +675,87 @@ export default function App() {
 
           </div>
 
-          {/* Footer */}
-          <footer style={{
-            borderTop: '1px solid var(--b0)', padding: '14px 28px', marginTop: 'auto',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16,
-            fontSize: 12, color: 'var(--t3)', fontFamily: 'var(--mono)',
-            background: 'var(--bg)'
-          }}>
-            <span>© 2026 Pranshu. All rights reserved.</span>
-            <a
-              href="https://www.linkedin.com/in/pranshu-pujara-2a0564376/"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'inherit', textDecoration: 'none' }}
-            >
-              <span>LinkedIn</span>
-            </a>
-            <a
-              href="https://github.com/PranshuPujara"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'inherit', textDecoration: 'none' }}
-            >
-              <span>GitHub</span>
-            </a>
+          {/* Footer — two-tier: brand + links, then copyright meta */}
+          <footer className="site-footer">
+            <div className="site-footer-row">
+              <div className="site-footer-brand">
+                <Logo size={22} />
+                <span className="site-footer-wordmark">ForgeSolve</span>
+                {/* <span className="site-footer-pill">beta</span> */}
+              </div>
+              <nav className="site-footer-links" aria-label="Footer">
+                <a
+                  href="https://github.com/PranshuPujara"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="GitHub profile"
+                >
+                  <GithubMark size={14} /> GitHub
+                </a>
+                <a
+                  href="https://www.linkedin.com/in/pranshu-pujara-2a0564376/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="LinkedIn profile"
+                >
+                  <LinkedinMark size={14} /> LinkedIn
+                </a>
+              </nav>
+            </div>
+            <div className="site-footer-meta">
+              <span>© 2026 Pranshu Pujara · All rights reserved</span>
+              <span className="site-footer-dot" aria-hidden="true">·</span>
+              {/* <span className="site-footer-tagline">
+                Built with <Heart size={11} strokeWidth={2.2} fill="currentColor" /> for problem-solvers
+              </span> */}
+            </div>
           </footer>
         </main>
       </div>
 
+      {/* Mobile bottom tab bar — primary nav on phones (replaces sidebar nav) */}
+      <nav className="mob-nav" aria-label="Primary">
+        <div className="mob-nav-row">
+          {[
+            { id: 'discover', label: 'Discover', Icon: Compass },
+            { id: 'profile',  label: 'Profile',  Icon: User },
+            { id: 'history',  label: 'History',  Icon: History },
+          ].map(item => {
+            const active = activePanel === item.id;
+            const histCount = item.id === 'history'
+              ? (() => { const h = storage.get('history', []); return h.length; })()
+              : 0;
+            const showHandleDot = item.id === 'profile' && userHandle.status === 'ok';
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => { switchPanel(item.id); if (mobileOpen) setMobileOpen(false); }}
+                className={`mob-nav-btn ${active ? 'active' : ''}`}
+                aria-current={active ? 'page' : undefined}
+                aria-label={item.label}
+              >
+                <span className="mob-nav-icon-wrap">
+                  <item.Icon size={20} strokeWidth={1.9} />
+                  {item.id === 'history' && histCount > 0 && (
+                    <span className="mob-nav-badge">{histCount > 99 ? '99+' : histCount}</span>
+                  )}
+                  {showHandleDot && <span className="mob-nav-dot" />}
+                </span>
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
       {/* Mobile overlay */}
       <style>{`
+        /* Remove blue tap highlight on mobile */
+        * {
+          -webkit-tap-highlight-color: transparent !important;
+        }
+        
         @media(max-width:768px){
           #mob-toggle{display:flex!important}
           /* Hide profile pill on mobile to prevent menu button from being squeezed */
