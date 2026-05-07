@@ -302,7 +302,7 @@ export default function App() {
       </div>
 
       {/* Nav — hidden on mobile (bottom tab bar handles primary nav) */}
-      <nav className="sidebar-nav-block" style={{ padding: '12px 10px 6px', flexShrink: 0, borderBottom: '1px solid var(--b0)' }}>
+      <nav className="sidebar-nav-block" style={{ padding: '0 10px 6px', flexShrink: 0, borderBottom: '1px solid var(--b0)' }}>
         <div className="nav-divider">Navigate</div>
         {[
           { id: 'discover', label: 'Discover', Icon: Compass },
@@ -322,20 +322,8 @@ export default function App() {
             className={`nav-item ${activePanel === item.id ? 'active' : ''}`}
           >
             <item.Icon size={16} strokeWidth={1.8} />
-            <span style={{ flex: 1 }}>{item.label}</span>
-            {item.badge && (
-              <span style={{
-                fontSize: 11, fontFamily: 'var(--mono)', padding: '4px 10px', borderRadius: 8,
-                background: activePanel === item.id ? 'var(--primary)' : 'var(--bg-el)',
-                color: activePanel === item.id ? '#000' : 'var(--t2)',
-                border: `1px solid ${activePanel === item.id ? 'var(--primary)' : 'var(--b2)'}`,
-                transition: 'all .15s',
-                fontWeight: 800, letterSpacing: '0.02em',
-                boxShadow: activePanel === item.id ? '0 2px 8px rgba(0, 217, 255, 0.25)' : 'none'
-              }}>
-                {item.badge}
-              </span>
-            )}
+            <span className="nav-item-label">{item.label}</span>
+            {item.badge && <span className="nav-badge">{item.badge}</span>}
           </button>
         ))}
       </nav>
