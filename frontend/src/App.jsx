@@ -294,7 +294,7 @@ export default function App() {
             <div style={{ fontSize: 18, fontWeight: 900, letterSpacing: '-.04em', color: 'var(--primary)', lineHeight: 1 }}>
               ForgeSolve
             </div>
-            <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 4, fontFamily: 'var(--mono)', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+            <div style={{ fontSize: 8.4, color: 'var(--t3)', marginTop: 4, fontFamily: 'var(--mono)', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
               elite problems
             </div>
           </div>
@@ -403,8 +403,9 @@ export default function App() {
           <Logo size={26} />
           <span style={{ fontSize: 16, fontWeight: 900, letterSpacing: '-.04em', color: 'var(--primary)' }}>ForgeSolve</span>
           <span style={{
-            fontSize: 10, fontFamily: 'var(--mono)', padding: '2px 7px', borderRadius: 5,
-            background: 'var(--primary-bg)', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 700
+            fontSize: 10, fontFamily: 'var(--mono)', padding: '3px 8px', borderRadius: 4,
+            background: 'rgba(74, 74, 78, 0.23)', color: 'rgba(150, 150, 150, 0.7)', 
+            border: '1px solid rgba(120, 120, 120, 0.45)', fontWeight: 600, letterSpacing: '0.3px'
           }}>beta</span>
         </button>
 
