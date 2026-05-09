@@ -472,10 +472,16 @@ button:active, a.btn:active { transform: scale(0.98); }
   box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
 }
 
+/* Sidebar drawer scroll padding — keeps last item (e.g. Friends list) above the mobile tab bar */
+.sidebar-scroll { padding-bottom: 20px; }
+
 @media (max-width: 768px) {
   .mob-nav { display: block; }
   /* Bottom padding clears the fixed tab bar (62px row + 16px breathing) */
   .main-pad-mobile { padding-bottom: calc(78px + env(safe-area-inset-bottom)) !important; }
+  /* Sidebar drawer extends to bottom:0 underneath the fixed mob-nav, so its
+     scroll container needs the same clearance or the last chip gets clipped. */
+  .sidebar-scroll { padding-bottom: calc(78px + env(safe-area-inset-bottom)) !important; }
 }
 
 /* ── Site footer ─────────────────────────

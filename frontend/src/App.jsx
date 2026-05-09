@@ -329,7 +329,7 @@ export default function App() {
       </nav>
 
       {/* Scrollable section content — use visibility toggling so components stay mounted */}
-      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '20px' }}>
+      <div className="sidebar-scroll" style={{ flex: 1, overflowY: 'auto' }}>
         <div style={{ display: activePanel === 'discover' ? 'block' : 'none' }}>
           {filterContentJSX}
         </div>
@@ -390,7 +390,7 @@ export default function App() {
         >
           <Logo size={26} />
           <span style={{ fontSize: 16, fontWeight: 900, letterSpacing: '-.04em', color: 'var(--primary)' }}>ForgeSolve</span>
-          <span style={{
+          <span className="hide-on-mobile" style={{
             fontSize: 10, fontFamily: 'var(--mono)', padding: '3px 8px', borderRadius: 4,
             background: 'rgba(74, 74, 78, 0.23)', color: 'rgba(150, 150, 150, 0.7)', 
             border: '1px solid rgba(120, 120, 120, 0.45)', fontWeight: 600, letterSpacing: '0.3px'
