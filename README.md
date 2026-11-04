@@ -129,6 +129,15 @@ A tool to discover, filter, and practice competitive programming problems with r
 - **Frontend**: Deployed on [Vercel](https://vercel.com)
 - **Backend**: Deployed on [Render](https://render.com)
 
+## 📚 Documentation & Developer Guides
+
+- **[Agent Guide (AGENTS.md)](./AGENTS.md)**: Operating rules and invariants for AI agents (Devin, Claude, Copilot, Antigravity)
+- **[System Architecture (docs/ARCHITECTURE.md)](./docs/ARCHITECTURE.md)**: System design, data flow diagrams, caching lifecycle, and fallback mechanisms
+- **[API Specification (docs/API.md)](./docs/API.md)**: Complete REST endpoint documentation, schemas, and error codes
+- **[Contributing Guide (CONTRIBUTING.md)](./CONTRIBUTING.md)**: Development setup, branch guidelines, and PR workflow
+- **[Code of Conduct (CODE_OF_CONDUCT.md)](./CODE_OF_CONDUCT.md)**: Contributor Covenant v2.1
+- **[Security Policy (SECURITY.md)](./SECURITY.md)**: Vulnerability disclosure instructions
+
 ## 📄 License
 
 Apache-2.0. See LICENSE file for details.
@@ -138,7 +147,7 @@ Apache-2.0. See LICENSE file for details.
 ## ⚙️ Setup Instructions (Local Development)
 
 ### Prerequisites
-- Node.js 16+ and npm
+- Node.js 18+ and npm
 
 ### Clone & Install
 
@@ -146,21 +155,32 @@ Apache-2.0. See LICENSE file for details.
 git clone https://github.com/PranshuPujara/SolveForge.git
 cd SolveForge
 
-cd backend && npm install
-cd ../frontend && npm install
+# Backend Setup
+cd backend
+cp .env.example .env
+npm install
+
+# Frontend Setup
+cd ../frontend
+cp .env.example .env
+npm install
 ```
 
 ### Run Locally
 
 ```bash
-# Terminal 1 - Backend
+# Terminal 1 - Backend (http://localhost:5000 or 5001)
 cd backend && npm run dev
 
-# Terminal 2 - Frontend
+# Terminal 2 - Frontend (http://localhost:5173)
 cd frontend && npm run dev
 ```
 
 Visit `http://localhost:5173`
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read the [Contributing Guide](./CONTRIBUTING.md) before opening a pull request.
 
 ## 👤 Author
 
