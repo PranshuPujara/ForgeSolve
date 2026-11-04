@@ -29,16 +29,19 @@ router.post('/pick', async (req, res, next) => {
       smartMode = false,
       lastRating,
       ignoreFilterMode = false,
-      // User handle filtering (arrays from frontend)
+      // Codeforces user handle filtering (arrays of problem IDs)
       excludeUserSolved  = [],
       showOnlyUserSolved = [],
+      // LeetCode user handle filtering (arrays of titleSlugs)
+      excludeUserSolvedSlugs = [],
+      showOnlyUserSolvedSlugs = [],
     } = req.body;
 
     // Load problem pool
     const problems = await loadProblems(platform);
     if (!problems) return res.status(400).json({ error: `Unknown platform: ${platform}` });
 
-    // Friend data
+    // Codeforces-only friend data
     let solvedSet = new Set(), attemptedSet = new Set(), perProblem = {};
     const activeMode = ignoreFilterMode ? 'none' : filterMode;
     if (platform === 'codeforces' && friendHandles.length > 0 && activeMode !== 'none') {
@@ -46,35 +49,53 @@ router.post('/pick', async (req, res, next) => {
       solvedSet = fd.solvedUnion; attemptedSet = fd.attemptedUnion; perProblem = fd.perProblem;
     }
 
-    // Smart mode bump
+    // Codeforces-only smart mode bump
     let effectiveMin = minRating, effectiveMax = maxRating;
-    if (smartMode && lastRating && platform === 'codeforces') {
-      effectiveMin = lastRating + 100; effectiveMax = lastRating + 400;
+    if (platform === 'codeforces') {
+      if (smartMode && lastRating) {
+        effectiveMin = lastRating + 100;
+        effectiveMax = lastRating + 400;
+      }
+    } else {
+      // Non-CF platforms ignore rating and friend filters
+      effectiveMin = undefined;
+      effectiveMax = undefined;
     }
 
     const historySet = new Set(history);
     let filterSet = new Set(), friendFilterMode = 'none';
-    if (activeMode === 'unsolved') { filterSet = attemptedSet; friendFilterMode = 'intersect'; }
-    else if (activeMode === 'solved') { filterSet = solvedSet; friendFilterMode = 'intersect'; }
+    if (platform === 'codeforces') {
+      if (activeMode === 'unsolved') { filterSet = attemptedSet; friendFilterMode = 'intersect'; }
+      else if (activeMode === 'solved') { filterSet = solvedSet; friendFilterMode = 'intersect'; }
+    }
 
     // Build user-handle sets
     const excludeSet   = new Set(excludeUserSolved);
     const showOnlySet  = new Set(showOnlyUserSolved);
+    const excludeSlugsSet  = new Set(excludeUserSolvedSlugs);
+    const showOnlySlugsSet = new Set(showOnlyUserSolvedSlugs);
 
     let filtered = filterProblems({
-      problems, tags,
-      minRating: effectiveMin, maxRating: effectiveMax, difficulty,
-      filterSet, friendFilterMode,
+      problems,
+      tags,
+      minRating: effectiveMin,
+      maxRating: effectiveMax,
+      difficulty,
+      filterSet,
+      friendFilterMode,
       history: historySet,
       excludeUserSolved: excludeSet,
       showOnlyUserSolved: showOnlySet,
+      excludeUserSolvedSlugs: excludeSlugsSet,
+      showOnlyUserSolvedSlugs: showOnlySlugsSet,
     });
 
-    // Friend-filtered no match → special response
-    const wasFriendFiltered = (filterMode === 'unsolved' || filterMode === 'solved') && !ignoreFilterMode && friendHandles.length > 0;
+    // Friend-filtered no match → special response (Codeforces only)
+    const wasFriendFiltered = platform === 'codeforces' && (filterMode === 'unsolved' || filterMode === 'solved') && !ignoreFilterMode && friendHandles.length > 0;
     if (filtered.length === 0 && wasFriendFiltered) {
       return res.status(404).json({
-        noFriendMatch: true, filterMode,
+        noFriendMatch: true,
+        filterMode,
         error: `No problems match your rating/tags AND the "${filterMode}" friend filter.`,
       });
     }
@@ -84,19 +105,25 @@ router.post('/pick', async (req, res, next) => {
     if (filtered.length === 0 && historySet.size > 0) {
       retriedWithoutHistory = true;
       filtered = filterProblems({
-        problems, tags,
-        minRating: effectiveMin, maxRating: effectiveMax, difficulty,
-        filterSet, friendFilterMode,
+        problems,
+        tags,
+        minRating: effectiveMin,
+        maxRating: effectiveMax,
+        difficulty,
+        filterSet,
+        friendFilterMode,
         history: new Set(),
         excludeUserSolved: excludeSet,
         showOnlyUserSolved: showOnlySet,
+        excludeUserSolvedSlugs: excludeSlugsSet,
+        showOnlyUserSolvedSlugs: showOnlySlugsSet,
       });
     }
 
     if (filtered.length === 0) {
       return res.status(404).json({
         error: 'No problems found matching your filters.',
-        suggestions: ['Broaden the rating range', 'Remove some tag filters', 'Change the filter mode'],
+        suggestions: ['Broaden the rating/difficulty range', 'Remove some tag filters', 'Change or clear user filters'],
       });
     }
 
@@ -123,7 +150,16 @@ router.post('/reattempt', async (req, res, next) => {
     }
 
     // Find the exact problem by its ID in the full problem pool
-    const found = problems.find(p => p.id === problemId);
+    // For LeetCode, support resolving 'lc-1', '1', or 'two-sum'
+    const found = problems.find(p => {
+      if (p.id === problemId) return true;
+      if (platform === 'leetcode') {
+        if (p.id === `lc-${problemId}`) return true;
+        if (p.questionId === String(problemId)) return true;
+        if (p.titleSlug === problemId) return true;
+      }
+      return false;
+    });
 
     if (!found) {
       return res.status(404).json({
@@ -142,25 +178,38 @@ router.post('/reattempt', async (req, res, next) => {
 /* ── POST /daily — deterministic daily problem ── */
 router.post('/daily', async (req, res, next) => {
   try {
-    const { platform='codeforces', tags=[], minRating=1000, maxRating=1800 } = req.body;
+    const { platform = 'codeforces', tags = [], minRating = 1000, maxRating = 1800, difficulty } = req.body;
     const problems = await loadProblems(platform);
     if (!problems) return res.status(400).json({ error: `Unknown platform: ${platform}` });
-    const filtered = filterProblems({ problems, tags, minRating, maxRating });
+
+    const filtered = filterProblems({
+      problems,
+      tags,
+      minRating: platform === 'codeforces' ? minRating : undefined,
+      maxRating: platform === 'codeforces' ? maxRating : undefined,
+      difficulty: platform !== 'codeforces' ? difficulty : undefined,
+    });
+
     if (!filtered.length) return res.status(404).json({ error: 'No daily problem found.' });
-    const today = new Date().toISOString().slice(0,10);
-    const seed  = today.split('-').reduce((a,n)=>a+parseInt(n),0);
+
+    const today = new Date().toISOString().slice(0, 10);
+    const seed  = today.split('-').reduce((a, n) => a + parseInt(n, 10), 0);
     res.json({ problem: filtered[seed % filtered.length], date: today, meta: { totalMatched: filtered.length } });
-  } catch(err) { next(err); }
+  } catch (err) { next(err); }
 });
 
 /* ── GET /tags ── */
 router.get('/tags', async (req, res, next) => {
   try {
-    const { platform='codeforces' } = req.query;
-    const svc = { codeforces: require('../services/codeforcesService'), leetcode: require('../services/leetcodeService'), gfg: require('../services/gfgService') }[platform];
+    const { platform = 'codeforces' } = req.query;
+    const svc = {
+      codeforces: require('../services/codeforcesService'),
+      leetcode: require('../services/leetcodeService'),
+      gfg: require('../services/gfgService'),
+    }[platform];
     if (!svc) return res.status(400).json({ error: 'Unknown platform' });
     res.json({ platform, tags: await svc.getAllTags() });
-  } catch(err) { next(err); }
+  } catch (err) { next(err); }
 });
 
 module.exports = router;
