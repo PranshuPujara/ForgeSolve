@@ -18,27 +18,35 @@ const CountUp = ({ target }) => {
 
 const PLAT_COLOR = { codeforces:'var(--blue)', leetcode:'var(--orange)', gfg:'var(--green)' };
 
-export const ProblemCard = ({ problem, meta, onPickAgain, userSolvedIds, userHandle }) => {
+export const ProblemCard = ({ problem, meta, onPickAgain, userSolvedIds, userHandle, lcSolvedSlugs }) => {
   const { seconds, running, formatted, start, stop, reset } = useTimer();
   const solver = useLiveSolver();
   const [opened,  setOpened]  = useState(false);
   const [copied,  setCopied]  = useState(false);
   const [showAll, setShowAll] = useState(false);
 
+  const isCf = problem.platform === 'codeforces';
+  const isLc = problem.platform === 'leetcode';
+
   const accent = PLAT_COLOR[problem.platform] || 'var(--primary)';
   const tags = problem.tags || [];
   const visible = showAll ? tags : tags.slice(0,8);
   const timerColor = seconds>3600?'var(--red)':seconds>1800?'var(--yellow)':'var(--green)';
 
-  // Check if user already solved this
-  const userSolved = userSolvedIds?.has(problem.id);
+  // Check if user already solved this: CF checks problem.id, LC checks problem.titleSlug
+  const userSolved = isCf
+    ? userSolvedIds?.has(problem.id)
+    : isLc
+      ? lcSolvedSlugs?.has(problem.titleSlug)
+      : false;
 
   const handleOpen = () => {
     window.open(problem.url,'_blank','noopener,noreferrer');
     if(!opened){ 
       setOpened(true); 
       start(); 
-      if (problem.platform === 'codeforces' && userHandle) {
+      // Live solver tracking only applies to Codeforces
+      if (isCf && userHandle) {
         solver.startTracking(problem.id, userHandle);
       }
     }
@@ -49,10 +57,10 @@ export const ProblemCard = ({ problem, meta, onPickAgain, userSolvedIds, userHan
   };
 
   useEffect(() => {
-    if (solver.isSolved && solver.problemId === problem.id && running) {
+    if (isCf && solver.isSolved && solver.problemId === problem.id && running) {
       stop();
     }
-  }, [solver.isSolved, solver.problemId, problem.id, running, stop]);
+  }, [solver.isSolved, solver.problemId, problem.id, running, stop, isCf]);
 
   return (
     <div className="anim-scale">
@@ -75,7 +83,7 @@ export const ProblemCard = ({ problem, meta, onPickAgain, userSolvedIds, userHan
           <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:14 }}>
             <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
               <PlatformBadge platform={problem.platform} />
-              <DifficultyBadge difficulty={problem.difficulty} rating={problem.rating} />
+              <DifficultyBadge difficulty={problem.difficulty} rating={isCf ? problem.rating : null} />
               {meta?.isDaily && <Badge color="acid"><Clock size={12} strokeWidth={2} /> Daily</Badge>}
               {userSolved && <Badge color="green"><Check size={12} strokeWidth={2.5} /> Solved</Badge>}
             </div>
@@ -93,7 +101,8 @@ export const ProblemCard = ({ problem, meta, onPickAgain, userSolvedIds, userHan
           <div>
             <h2 style={{ fontSize:22, fontWeight:900, color:'var(--t1)', lineHeight:1.3, letterSpacing:'-.025em', marginBottom:6 }}>{problem.name}</h2>
             <div style={{ fontSize:11, color:'var(--t3)', fontFamily:'var(--mono)', fontWeight:600, letterSpacing:'.05em', textTransform:'uppercase' }}>
-              {problem.id}{problem.contestId&&<span style={{ marginLeft:10, opacity:0.7 }}>contest #{problem.contestId}</span>}
+              {problem.id}
+              {isCf && problem.contestId && <span style={{ marginLeft:10, opacity:0.7 }}>contest #{problem.contestId}</span>}
             </div>
           </div>
 
@@ -110,8 +119,8 @@ export const ProblemCard = ({ problem, meta, onPickAgain, userSolvedIds, userHan
             </div>
           )}
 
-          {/* Friends solved */}
-          {problem.friendsSolvedCount > 0 && (
+          {/* Friends solved (Codeforces only) */}
+          {isCf && problem.friendsSolvedCount > 0 && (
             <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderRadius:9, background:'var(--green-bg)', border:'1px solid var(--green)40' }}>
               <Users size={16} strokeWidth={1.8} color="var(--green)" style={{ flexShrink:0 }} />
               <span style={{ fontSize:13, color:'var(--green)', fontWeight:600 }}>{problem.friendsSolvedCount} friend{problem.friendsSolvedCount!==1?'s':''} solved</span>
@@ -176,8 +185,8 @@ export const ProblemCard = ({ problem, meta, onPickAgain, userSolvedIds, userHan
           </div>
         </div>
 
-        {/* Live Solve Success Overlay */}
-        {solver.isSolved && solver.problemId === problem.id && (
+        {/* Live Solve Success Overlay (Codeforces only) */}
+        {isCf && solver.isSolved && solver.problemId === problem.id && (
           <div className="anim-scale" style={{
             position:'absolute', top:0, left:0, right:0, bottom:0,
             background:'rgba(10, 15, 20, 0.85)', backdropFilter:'blur(6px)',

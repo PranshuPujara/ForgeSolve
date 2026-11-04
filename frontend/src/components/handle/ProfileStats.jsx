@@ -13,42 +13,53 @@ const RANK_COLOR = {
   'international grandmaster': '#ff0000',
   'legendary grandmaster':     '#ff0000',
 };
-const rankColor = r => RANK_COLOR[r?.toLowerCase()] || 'var(--t2)';
+const rankColor = (r, isLc) => {
+  if (isLc) return 'var(--orange)';
+  return RANK_COLOR[r?.toLowerCase()] || 'var(--t2)';
+};
 
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const fmtMonth = ym => { const [,m] = ym.split('-'); return MONTHS_SHORT[parseInt(m)-1]; };
+const fmtMonth = ym => {
+  if (!ym || !ym.includes('-')) return '';
+  const [,m] = ym.split('-');
+  return MONTHS_SHORT[parseInt(m, 10)-1] || '';
+};
 
 // ── Mini bar chart ─────────────────────────────────────
-const BarChart = ({ data, color = 'var(--primary)', height = 60 }) => {
-  const max = Math.max(...data.map(d => d.count), 1);
+const BarChart = ({ data = [], color = 'var(--primary)', height = 60 }) => {
+  const counts = data.map(d => d.count || 0);
+  const max = Math.max(...counts, 1);
   const [hovered, setHovered] = useState(null);
+
+  if (!data || data.length === 0) return null;
 
   return (
     <div style={{ position:'relative' }}>
       <div style={{ display:'flex', alignItems:'flex-end', gap:3, height }}>
         {data.map((d, i) => {
-          const pct = (d.count / max) * 100;
+          const count = d.count || 0;
+          const pct = (count / max) * 100;
           const isHov = hovered === i;
           return (
-            <div key={d.month || d.rating} style={{ flex:1, height:'100%', display:'flex', flexDirection:'column', justifyContent:'flex-end', alignItems:'center', cursor:'default' }}
+            <div key={d.month || d.rating || i} style={{ flex:1, height:'100%', display:'flex', flexDirection:'column', justifyContent:'flex-end', alignItems:'center', cursor:'default' }}
               onMouseEnter={() => setHovered(i)}
               onMouseLeave={() => setHovered(null)}
             >
               {isHov && (
                 <div style={{
                   position:'absolute', bottom: height + 8,
-                  left:`${(i / data.length) * 100}%`,
+                  left:`${(i / Math.max(data.length, 1)) * 100}%`,
                   background:'var(--bg-press)', border:'1px solid var(--b2)',
                   borderRadius:6, padding:'4px 8px', fontSize:11, fontFamily:'var(--mono)',
                   color:'var(--t1)', whiteSpace:'nowrap', zIndex:10, pointerEvents:'none',
                   boxShadow:'0 4px 12px #0008',
                 }}>
-                  {d.month ? fmtMonth(d.month) : `${d.rating}`}: <strong>{d.count}</strong>
+                  {d.month ? fmtMonth(d.month) : `${d.rating}`}: <strong>{count}</strong>
                 </div>
               )}
               <div className="bar-grow" style={{
                 width:'100%',
-                height:`${Math.max(pct, d.count > 0 ? 4 : 0)}%`,
+                height:`${Math.max(pct, count > 0 ? 4 : 0)}%`,
                 background: isHov ? 'var(--primary)' : color,
                 borderRadius:'3px 3px 0 0',
                 transition:'background .12s',
@@ -60,8 +71,8 @@ const BarChart = ({ data, color = 'var(--primary)', height = 60 }) => {
       {/* x-axis labels for monthly */}
       {data[0]?.month && (
         <div style={{ display:'flex', gap:3, marginTop:4 }}>
-          {data.map((d,i) => (
-            <div key={d.month} style={{ flex:1, textAlign:'center', fontSize:9, color:'var(--t3)', fontFamily:'var(--mono)' }}>
+          {data.map((d, i) => (
+            <div key={d.month || i} style={{ flex:1, textAlign:'center', fontSize:9, color:'var(--t3)', fontFamily:'var(--mono)' }}>
               {i % 3 === 0 ? fmtMonth(d.month) : ''}
             </div>
           ))}
@@ -71,56 +82,27 @@ const BarChart = ({ data, color = 'var(--primary)', height = 60 }) => {
   );
 };
 
-// ── Circular progress ───────────────────────────────────
-const CircleProgress = ({ value, max, label, color, size = 72 }) => {
-  const r    = (size - 8) / 2;
-  const circ = 2 * Math.PI * r;
-  const pct  = Math.min(value / max, 1);
-  const dash = circ * pct;
-
-  return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:5 }}>
-      <div style={{ position:'relative', width:size, height:size }}>
-        <svg width={size} height={size} style={{ transform:'rotate(-90deg)' }}>
-          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--b1)" strokeWidth={5} />
-          <circle cx={size/2} cy={size/2} r={r} fill="none"
-            stroke={color} strokeWidth={5} strokeLinecap="round"
-            strokeDasharray={`${dash} ${circ}`}
-            style={{ transition:'stroke-dasharray .6s cubic-bezier(.16,1,.3,1)' }}
-          />
-        </svg>
-        <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center',
-          fontSize:15, fontWeight:800, color, fontFamily:'var(--mono)' }}>
-          {value}
-        </div>
-      </div>
-      <div style={{ fontSize:10, color:'var(--t3)', fontFamily:'var(--mono)', letterSpacing:'.06em', textTransform:'uppercase' }}>
-        {label}
-      </div>
-    </div>
-  );
-};
-
 // ── Tag bar ─────────────────────────────────────────────
-const TagBar = ({ tag, count, max }) => {
-  const pct = Math.round((count / max) * 100);
+const TagBar = ({ tag, count, max, barColor = 'var(--primary)' }) => {
+  const safeMax = Math.max(max, 1);
+  const pct = Math.round(((count || 0) / safeMax) * 100);
   return (
     <div style={{ display:'flex', alignItems:'center', gap:8 }}>
       <div style={{ fontSize:11, fontFamily:'var(--mono)', color:'var(--t2)', width:110, flexShrink:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
         {tag}
       </div>
       <div style={{ flex:1, height:5, background:'var(--bg-press)', borderRadius:99, overflow:'hidden' }}>
-        <div style={{ height:'100%', width:`${pct}%`, background:'var(--primary)', borderRadius:99, transition:'width .4s cubic-bezier(.16,1,.3,1)' }} />
+        <div style={{ height:'100%', width:`${pct}%`, background: barColor, borderRadius:99, transition:'width .4s cubic-bezier(.16,1,.3,1)' }} />
       </div>
       <div style={{ fontSize:11, fontFamily:'var(--mono)', color:'var(--t3)', width:28, textAlign:'right', flexShrink:0 }}>
-        {count}
+        {count || 0}
       </div>
     </div>
   );
 };
 
 // ── Main ProfileStats component ─────────────────────────
-export const ProfileStats = ({ stats, loading, onRefresh }) => {
+export const ProfileStats = ({ stats, loading, onRefresh, platform = 'codeforces' }) => {
   const [activeTab, setActiveTab] = useState('overview'); // overview | tags | activity
 
   if (loading) {
@@ -135,7 +117,15 @@ export const ProfileStats = ({ stats, loading, onRefresh }) => {
 
   if (!stats) return null;
 
-  const rc = rankColor(stats.rank);
+  const isLc = platform === 'leetcode' || stats.platform === 'leetcode';
+  const rc = rankColor(stats.rank, isLc);
+  const accentColor = isLc ? 'var(--orange)' : 'var(--primary)';
+
+  const monthlyList = stats.monthlyActivity || [];
+  const monthlyCounts = monthlyList.map(d => d.count || 0);
+  const peakMonthly = monthlyCounts.length > 0 ? Math.max(...monthlyCounts) : 0;
+  const totalYear = monthlyList.reduce((a, b) => a + (b.count || 0), 0);
+  const topTagsList = stats.topTags || [];
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14 }} className="panel-in">
@@ -147,7 +137,7 @@ export const ProfileStats = ({ stats, loading, onRefresh }) => {
         background:'var(--bg-el)', border:'1px solid var(--b1)',
         position:'relative', overflow:'hidden',
       }}>
-        {/* Rank color accent strip */}
+        {/* Rank / platform color accent strip */}
         <div style={{ position:'absolute', left:0, top:0, bottom:0, width:3, background:rc, borderRadius:'10px 0 0 10px' }} />
 
         {/* Avatar */}
@@ -168,16 +158,16 @@ export const ProfileStats = ({ stats, loading, onRefresh }) => {
               @{stats.handle}
             </span>
             <span style={{ fontSize:11, fontWeight:600, color:rc, fontFamily:'var(--mono)' }}>
-              {stats.rank}
+              {isLc ? (stats.rank || (stats.rating ? `Rank #${stats.rating}` : 'LeetCode')) : stats.rank}
             </span>
           </div>
           <div style={{ display:'flex', gap:12, marginTop:4, flexWrap:'wrap' }}>
-            {stats.rating && (
+            {!isLc && stats.rating && (
               <span style={{ fontSize:12, fontFamily:'var(--mono)', color:rc, fontWeight:700, display:'flex', alignItems:'center', gap:3 }}>
                 <span style={{ fontSize:14 }}>★</span> {stats.rating}
               </span>
             )}
-            {stats.maxRating && stats.maxRating !== stats.rating && (
+            {!isLc && stats.maxRating && stats.maxRating !== stats.rating && (
               <span style={{ fontSize:11, color:'var(--t3)', fontFamily:'var(--mono)' }}>
                 peak {stats.maxRating}
               </span>
@@ -185,6 +175,11 @@ export const ProfileStats = ({ stats, loading, onRefresh }) => {
             {stats.registeredAt && (
               <span style={{ fontSize:11, color:'var(--t3)', fontFamily:'var(--mono)' }}>
                 since {stats.registeredAt}
+              </span>
+            )}
+            {stats.country && (
+              <span style={{ fontSize:11, color:'var(--t3)', fontFamily:'var(--mono)' }}>
+                {stats.country}
               </span>
             )}
           </div>
@@ -200,8 +195,8 @@ export const ProfileStats = ({ stats, loading, onRefresh }) => {
             cursor:'pointer', transition:'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
             boxShadow:'0 2px 5px rgba(0,0,0,0.2)'
           }}
-          onMouseEnter={e=>{ e.currentTarget.style.color='var(--primary)'; e.currentTarget.style.borderColor='var(--primary)'; e.currentTarget.style.background='var(--primary-bg)'; e.currentTarget.style.transform='translateY(-1px)'; e.currentTarget.style.boxShadow='0 4px 12px rgba(0, 217, 255, 0.15)'; }}
-          onMouseLeave={e=>{ e.currentTarget.style.color='var(--t2)'; e.currentTarget.style.borderColor='var(--b2)'; e.currentTarget.style.background='var(--bg-card)'; e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow='0 2px 5px rgba(0,0,0,0.2)'; }}
+          onMouseEnter={e=>{ e.currentTarget.style.color=accentColor; e.currentTarget.style.borderColor=accentColor; e.currentTarget.style.transform='translateY(-1px)'; }}
+          onMouseLeave={e=>{ e.currentTarget.style.color='var(--t2)'; e.currentTarget.style.borderColor='var(--b2)'; e.currentTarget.style.transform=''; }}
           onMouseDown={e=>e.currentTarget.style.transform='scale(.97)'}
           onMouseUp={e=>e.currentTarget.style.transform='translateY(-1px)'}
         >
@@ -232,32 +227,77 @@ export const ProfileStats = ({ stats, loading, onRefresh }) => {
       {/* ── Overview tab ── */}
       {activeTab === 'overview' && (
         <div style={{ display:'flex', flexDirection:'column', gap:12 }} className="panel-in">
-          {/* Big numbers row */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
-            {[
-              { label:'Solved',     value:stats.solvedCount,      color:'var(--primary)' },
-              { label:'Attempted',  value:stats.attemptedCount,   color:'var(--yellow)' },
-              { label:'AC Rate',    value:`${stats.acRate}%`,     color:'var(--green)' },
-            ].map(s => (
-              <div key={s.label} style={{
-                padding:'12px 10px', borderRadius:10, textAlign:'center',
-                background:'var(--bg-el)', border:'1px solid var(--b1)',
-              }}>
-                <div style={{ fontSize:20, fontWeight:800, color:s.color, fontFamily:'var(--mono)', lineHeight:1 }}>
-                  {typeof s.value === 'number' ? s.value.toLocaleString() : s.value}
+          {/* Numbers row */}
+          {isLc ? (
+            <>
+              {/* LeetCode: Solved, AC Rate, and Easy/Med/Hard */}
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:8 }}>
+                <div style={{ padding:'12px 10px', borderRadius:10, textAlign:'center', background:'var(--bg-el)', border:'1px solid var(--b1)' }}>
+                  <div style={{ fontSize:20, fontWeight:800, color:'var(--orange)', fontFamily:'var(--mono)', lineHeight:1 }}>
+                    {(stats.solvedCount || 0).toLocaleString()}
+                  </div>
+                  <div style={{ fontSize:10, color:'var(--t3)', marginTop:4, fontFamily:'var(--mono)', letterSpacing:'.08em', textTransform:'uppercase' }}>
+                    Solved
+                  </div>
                 </div>
-                <div style={{ fontSize:10, color:'var(--t3)', marginTop:4, fontFamily:'var(--mono)', letterSpacing:'.08em', textTransform:'uppercase' }}>
-                  {s.label}
+                <div style={{ padding:'12px 10px', borderRadius:10, textAlign:'center', background:'var(--bg-el)', border:'1px solid var(--b1)' }}>
+                  <div style={{ fontSize:20, fontWeight:800, color:'var(--green)', fontFamily:'var(--mono)', lineHeight:1 }}>
+                    {stats.acRate || 0}%
+                  </div>
+                  <div style={{ fontSize:10, color:'var(--t3)', marginTop:4, fontFamily:'var(--mono)', letterSpacing:'.08em', textTransform:'uppercase' }}>
+                    AC Rate
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
+
+              {/* Difficulty breakdown */}
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:8 }}>
+                {[
+                  { label:'Easy',   value:stats.easySolved || 0,   color:'var(--green)' },
+                  { label:'Medium', value:stats.mediumSolved || 0, color:'var(--yellow)' },
+                  { label:'Hard',   value:stats.hardSolved || 0,   color:'var(--red)' },
+                ].map(s => (
+                  <div key={s.label} style={{
+                    padding:'10px 8px', borderRadius:10, textAlign:'center',
+                    background:'var(--bg-el)', border:'1px solid var(--b1)',
+                  }}>
+                    <div style={{ fontSize:18, fontWeight:800, color:s.color, fontFamily:'var(--mono)', lineHeight:1 }}>
+                      {s.value.toLocaleString()}
+                    </div>
+                    <div style={{ fontSize:10, color:'var(--t3)', marginTop:4, fontFamily:'var(--mono)', letterSpacing:'.08em', textTransform:'uppercase' }}>
+                      {s.label}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
+              {[
+                { label:'Solved',     value:stats.solvedCount,      color:'var(--primary)' },
+                { label:'Attempted',  value:stats.attemptedCount,   color:'var(--yellow)' },
+                { label:'AC Rate',    value:`${stats.acRate}%`,     color:'var(--green)' },
+              ].map(s => (
+                <div key={s.label} style={{
+                  padding:'12px 10px', borderRadius:10, textAlign:'center',
+                  background:'var(--bg-el)', border:'1px solid var(--b1)',
+                }}>
+                  <div style={{ fontSize:20, fontWeight:800, color:s.color, fontFamily:'var(--mono)', lineHeight:1 }}>
+                    {typeof s.value === 'number' ? s.value.toLocaleString() : (s.value ?? 0)}
+                  </div>
+                  <div style={{ fontSize:10, color:'var(--t3)', marginTop:4, fontFamily:'var(--mono)', letterSpacing:'.08em', textTransform:'uppercase' }}>
+                    {s.label}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Streak row */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
             {[
-              { label:'Current Streak', value:`${stats.currentStreak}d`, color:'var(--warning)' },
-              { label:'Best Streak',    value:`${stats.maxStreak}d`,     color:'var(--yellow)' },
+              { label:'Current Streak', value:`${stats.currentStreak || 0}d`, color:'var(--orange)' },
+              { label:'Best Streak',    value:`${stats.maxStreak || 0}d`,     color:'var(--yellow)' },
             ].map(s => (
               <div key={s.label} style={{
                 padding:'11px 13px', borderRadius:10, display:'flex', alignItems:'center', gap:10,
@@ -273,16 +313,18 @@ export const ProfileStats = ({ stats, loading, onRefresh }) => {
           </div>
 
           {/* Total submissions */}
-          <div style={{ padding:'10px 14px', borderRadius:9, background:'var(--bg-el)', border:'1px solid var(--b1)',
-            display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-            <span style={{ fontSize:12, color:'var(--t2)' }}>Total submissions</span>
-            <span style={{ fontSize:13, fontWeight:700, fontFamily:'var(--mono)', color:'var(--t1)' }}>
-              {stats.totalSubmissions.toLocaleString()}
-            </span>
-          </div>
+          {stats.totalSubmissions !== undefined && (
+            <div style={{ padding:'10px 14px', borderRadius:9, background:'var(--bg-el)', border:'1px solid var(--b1)',
+              display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <span style={{ fontSize:12, color:'var(--t2)' }}>Total submissions</span>
+              <span style={{ fontSize:13, fontWeight:700, fontFamily:'var(--mono)', color:'var(--t1)' }}>
+                {(stats.totalSubmissions || 0).toLocaleString()}
+              </span>
+            </div>
+          )}
 
-          {/* Rating dist chart */}
-          {stats.ratingDist.length > 0 && (
+          {/* Rating dist chart (hidden when empty or for LC) */}
+          {stats.ratingDist && stats.ratingDist.length > 0 && (
             <div>
               <div className="lbl" style={{ marginBottom:8 }}>Solved by rating</div>
               <BarChart data={stats.ratingDist} color="var(--blue)" height={56} />
@@ -295,10 +337,10 @@ export const ProfileStats = ({ stats, loading, onRefresh }) => {
       {activeTab === 'tags' && (
         <div style={{ display:'flex', flexDirection:'column', gap:8 }} className="panel-in">
           <div className="lbl">Top solved topics</div>
-          {stats.topTags.length === 0
+          {topTagsList.length === 0
             ? <p style={{ fontSize:12, color:'var(--t3)', fontFamily:'var(--mono)' }}>No data yet</p>
-            : stats.topTags.map((t, i) => (
-                <TagBar key={t.tag} tag={t.tag} count={t.count} max={stats.topTags[0].count} />
+            : topTagsList.map((t) => (
+                <TagBar key={t.tag} tag={t.tag} count={t.count} max={topTagsList[0]?.count || 1} barColor={accentColor} />
               ))
           }
         </div>
@@ -308,10 +350,10 @@ export const ProfileStats = ({ stats, loading, onRefresh }) => {
       {activeTab === 'activity' && (
         <div style={{ display:'flex', flexDirection:'column', gap:10 }} className="panel-in">
           <div className="lbl">Problems solved — last 12 months</div>
-          <BarChart data={stats.monthlyActivity} color="var(--primary)" height={72} />
+          <BarChart data={monthlyList} color={accentColor} height={72} />
           <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'var(--t3)', fontFamily:'var(--mono)' }}>
-            <span>Total this year: <strong style={{ color:'var(--t1)' }}>{stats.monthlyActivity.reduce((a,b)=>a+b.count,0)}</strong></span>
-            <span>Peak: <strong style={{ color:'var(--primary)' }}>{Math.max(...stats.monthlyActivity.map(d=>d.count))}</strong></span>
+            <span>Total this year: <strong style={{ color:'var(--t1)' }}>{totalYear}</strong></span>
+            <span>Peak: <strong style={{ color:accentColor }}>{peakMonthly}</strong></span>
           </div>
         </div>
       )}

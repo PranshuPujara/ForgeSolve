@@ -137,6 +137,8 @@ export default function App() {
 
   const [excludeSolved, setExcludeSolved] = useState(() => storage.get('excludeSolved', false));
   const [showOnlySolved, setShowOnlySolved] = useState(() => storage.get('showOnlySolved', false));
+  const [lcExcludeSolved, setLcExcludeSolved] = useState(() => storage.get('lcExcludeSolved', false));
+  const [lcShowOnlySolved, setLcShowOnlySolved] = useState(() => storage.get('lcShowOnlySolved', false));
   const userHandle = useUserHandle();
 
   const { problem, loading, error, meta, noFriendMatch, pick, reattempt, fetchDaily, clear } = useProblemPicker();
@@ -147,6 +149,8 @@ export default function App() {
   }, [platform, tags, minRating, maxRating, difficulty, filterMode, smartMode]);
   useEffect(() => { storage.set('excludeSolved', excludeSolved); }, [excludeSolved]);
   useEffect(() => { storage.set('showOnlySolved', showOnlySolved); }, [showOnlySolved]);
+  useEffect(() => { storage.set('lcExcludeSolved', lcExcludeSolved); }, [lcExcludeSolved]);
+  useEffect(() => { storage.set('lcShowOnlySolved', lcShowOnlySolved); }, [lcShowOnlySolved]);
 
   const changePlatform = useCallback(p => {
     setPlatform(p); setTags([]); setDifficulty(null); setFilterMode('none'); clear();
@@ -160,7 +164,7 @@ export default function App() {
   const buildPayload = useCallback(() => ({
     platform, tags,
     ...(platform === 'codeforces' ? { minRating, maxRating } : { difficulty }),
-    filterMode,
+    filterMode: platform === 'codeforces' ? filterMode : 'none',
     friendHandles: platform === 'codeforces' ? friends : [],
     smartMode: smartMode && platform === 'codeforces',
     lastRating: getLastRating(),
@@ -170,7 +174,13 @@ export default function App() {
         ...(showOnlySolved ? { showOnlyUserSolved: Array.from(userHandle.solvedIds) } : {}),
       }
       : {}),
-  }), [platform, tags, minRating, maxRating, difficulty, filterMode, friends, smartMode, userHandle, excludeSolved, showOnlySolved]);
+    ...(platform === 'leetcode' && userHandle.lcStatus === 'ok' && userHandle.lcSolvedSlugs.size > 0
+      ? {
+        ...(lcExcludeSolved ? { excludeUserSolvedSlugs: Array.from(userHandle.lcSolvedSlugs) } : {}),
+        ...(lcShowOnlySolved ? { showOnlyUserSolvedSlugs: Array.from(userHandle.lcSolvedSlugs) } : {}),
+      }
+      : {}),
+  }), [platform, tags, minRating, maxRating, difficulty, filterMode, friends, smartMode, userHandle, excludeSolved, showOnlySolved, lcExcludeSolved, lcShowOnlySolved]);
 
   const handlePick = useCallback(() => {
     if (ready) { setReattemptId(null); pick(buildPayload()); }
@@ -308,7 +318,9 @@ export default function App() {
           { id: 'discover', label: 'Discover', Icon: Compass },
           {
             id: 'profile', label: 'My Profile', Icon: User,
-            badge: userHandle.status === 'ok' ? `@${userHandle.handle} • ${userHandle.solvedCount} AC` : null
+            badge: platform === 'leetcode'
+              ? (userHandle.lcStatus === 'ok' ? `@${userHandle.lcHandle} • ${userHandle.lcSolvedCount} AC` : null)
+              : (userHandle.status === 'ok' ? `@${userHandle.handle} • ${userHandle.solvedCount} AC` : null)
           },
           {
             id: 'history', label: 'History', Icon: History,
@@ -338,9 +350,11 @@ export default function App() {
           <div style={{ paddingTop: 4, paddingBottom: 14 }}>
             <HandlePanel
               hook={userHandle}
+              activePlatform={platform}
               excludeSolved={excludeSolved} onExcludeChange={setExcludeSolved}
               showOnlySolved={showOnlySolved} onShowOnlyChange={setShowOnlySolved}
-              variant="sidebar"
+              lcExcludeSolved={lcExcludeSolved} onLcExcludeChange={setLcExcludeSolved}
+              lcShowOnlySolved={lcShowOnlySolved} onLcShowOnlyChange={setLcShowOnlySolved}
             />
           </div>
         </div>
@@ -399,7 +413,32 @@ export default function App() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {/* Active handle pill in topbar — hidden on mobile */}
-          {userHandle.status === 'ok' && (
+          {platform === 'leetcode' && userHandle.lcStatus === 'ok' && (
+            <button type="button"
+              className="hide-on-mobile"
+              onClick={() => { if (typeof switchPanel === 'function') switchPanel('profile'); else setActivePanel('profile'); }}
+              style={{
+                alignItems: 'center', gap: 10, padding: '7px 16px',
+                borderRadius: 12, fontSize: 13, fontFamily: 'var(--mono)', cursor: 'pointer',
+                background: activePanel === 'profile' ? 'var(--bg-el)' : 'var(--bg-el)',
+                border: `1px solid ${activePanel === 'profile' ? 'var(--orange)' : 'var(--b1)'}`,
+                color: activePanel === 'profile' ? 'var(--orange)' : 'var(--t1)',
+                transition: 'all .2s cubic-bezier(0.16, 1, 0.3, 1)',
+                fontWeight: 800,
+                boxShadow: activePanel === 'profile' ? '0 4px 12px rgba(251, 146, 60, 0.15)' : '0 2px 5px rgba(0,0,0,0.2)',
+              }}
+              onMouseEnter={e => { if (activePanel !== 'profile') { e.currentTarget.style.borderColor = 'var(--orange)'; e.currentTarget.style.color = 'var(--orange)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
+              onMouseLeave={e => { if (activePanel !== 'profile') { e.currentTarget.style.borderColor = 'var(--b1)'; e.currentTarget.style.color = 'var(--t1)'; e.currentTarget.style.transform = ''; } }}
+            >
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--orange)', flexShrink: 0, boxShadow: '0 0 8px var(--orange)' }} />
+              <span>@{userHandle.lcHandle}</span>
+              <span style={{ color: 'var(--b2)', margin: '0 -2px' }}>|</span>
+              <span style={{ fontFamily: 'var(--mono)', fontWeight: 800, color: activePanel === 'profile' ? 'var(--orange)' : 'var(--t2)' }} title="LeetCode Solved">
+                {userHandle.lcSolvedCount.toLocaleString()} AC
+              </span>
+            </button>
+          )}
+          {platform !== 'leetcode' && userHandle.status === 'ok' && (
             <button type="button"
               className="hide-on-mobile"
               onClick={() => { if (typeof switchPanel === 'function') switchPanel('profile'); else setActivePanel('profile'); }}
@@ -503,7 +542,7 @@ export default function App() {
                   padding: '10px 15px', borderRadius: 10, background: 'var(--bg-card)', border: '1px solid var(--b1)',
                   fontSize: 12, fontFamily: 'var(--mono)'
                 }}>
-                  <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{platform}</span>
+                  <span style={{ color: platform === 'leetcode' ? 'var(--orange)' : 'var(--primary)', fontWeight: 700 }}>{platform}</span>
                   <span style={{ color: 'var(--b2)' }}>·</span>
                   {platform === 'codeforces'
                     ? <span style={{ color: 'var(--t2)', fontWeight: 600 }}>{minRating === maxRating ? `exact ${minRating}` : `${minRating}–${maxRating}`}</span>
@@ -512,10 +551,12 @@ export default function App() {
                       : <span style={{ color: 'var(--t3)' }}>—</span>
                   }
                   {tags.length > 0 && <><span style={{ color: 'var(--b2)' }}>·</span><span style={{ color: 'var(--t2)', fontWeight: 600 }}>{tags.slice(0, 2).join(', ')}{tags.length > 2 ? ` +${tags.length - 2}` : ''}</span></>}
-                  {filterMode !== 'none' && <><span style={{ color: 'var(--b2)' }}>·</span><span style={{ color: 'var(--primary)', fontWeight: 700 }}>{filterMode}</span></>}
-                  {excludeSolved && userHandle.status === 'ok' && <><span style={{ color: 'var(--b2)' }}>·</span><span style={{ color: 'var(--success)', fontWeight: 700 }}>−solved</span></>}
-                  {showOnlySolved && userHandle.status === 'ok' && <><span style={{ color: 'var(--b2)' }}>·</span><span style={{ color: 'var(--success)', fontWeight: 700 }}>only solved</span></>}
-                  {smartMode && <><span style={{ color: 'var(--b2)' }}>·</span><span style={{ color: 'var(--primary)', fontWeight: 700 }}>smart</span></>}
+                  {platform === 'codeforces' && filterMode !== 'none' && <><span style={{ color: 'var(--b2)' }}>·</span><span style={{ color: 'var(--primary)', fontWeight: 700 }}>{filterMode}</span></>}
+                  {platform === 'codeforces' && excludeSolved && userHandle.status === 'ok' && <><span style={{ color: 'var(--b2)' }}>·</span><span style={{ color: 'var(--success)', fontWeight: 700 }}>−solved</span></>}
+                  {platform === 'codeforces' && showOnlySolved && userHandle.status === 'ok' && <><span style={{ color: 'var(--b2)' }}>·</span><span style={{ color: 'var(--success)', fontWeight: 700 }}>only solved</span></>}
+                  {platform === 'leetcode' && lcExcludeSolved && userHandle.lcStatus === 'ok' && <><span style={{ color: 'var(--b2)' }}>·</span><span style={{ color: 'var(--orange)', fontWeight: 700 }}>−solved</span></>}
+                  {platform === 'leetcode' && lcShowOnlySolved && userHandle.lcStatus === 'ok' && <><span style={{ color: 'var(--b2)' }}>·</span><span style={{ color: 'var(--orange)', fontWeight: 700 }}>only solved</span></>}
+                  {platform === 'codeforces' && smartMode && <><span style={{ color: 'var(--b2)' }}>·</span><span style={{ color: 'var(--primary)', fontWeight: 700 }}>smart</span></>}
                 </div>
 
                 {/* Re-attempt banner — shown when retrying a problem from history */}
@@ -621,6 +662,7 @@ export default function App() {
                       onPickAgain={handlePick}
                       userSolvedIds={userHandle.status === 'ok' ? userHandle.solvedIds : null}
                       userHandle={userHandle.status === 'ok' ? userHandle.handle : null}
+                      lcSolvedSlugs={userHandle.lcStatus === 'ok' ? userHandle.lcSolvedSlugs : null}
                     />
                   )}
                   {!loading && !error && !problem && <EmptyState />}
@@ -636,13 +678,16 @@ export default function App() {
                     My Profile
                   </h2>
                   <p style={{ fontSize: 13, color: 'var(--t3)', lineHeight: 1.6 }}>
-                    Connect your CF handle to track progress and personalize problem discovery.
+                    Connect your Codeforces and LeetCode handles to track progress and personalize problem discovery.
                   </p>
                 </div>
                 <HandlePanel
                   hook={userHandle}
+                  activePlatform={platform}
                   excludeSolved={excludeSolved} onExcludeChange={setExcludeSolved}
                   showOnlySolved={showOnlySolved} onShowOnlyChange={setShowOnlySolved}
+                  lcExcludeSolved={lcExcludeSolved} onLcExcludeChange={setLcExcludeSolved}
+                  lcShowOnlySolved={lcShowOnlySolved} onLcShowOnlyChange={setLcShowOnlySolved}
                 />
               </div>
             )}

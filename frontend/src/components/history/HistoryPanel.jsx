@@ -3,6 +3,28 @@ import { Trash2, AlertCircle, ExternalLink, Swords, Clock } from 'lucide-react';
 import { getHistory, clearHistory } from '../../utils/localStorage';
 
 /* ── URL builder ─────────────────────────────────── */
+const LC_SLUG_MAP = {
+  '1': 'two-sum', '3': 'longest-substring-without-repeating-characters', '4': 'median-of-two-sorted-arrays',
+  '10': 'regular-expression-matching', '11': 'container-with-most-water', '15': '3sum', '20': 'valid-parentheses',
+  '21': 'merge-two-sorted-lists', '23': 'merge-k-sorted-lists', '25': 'reverse-nodes-in-k-group',
+  '33': 'search-in-rotated-sorted-array', '39': 'combination-sum', '42': 'trapping-rain-water',
+  '46': 'permutations', '49': 'group-anagrams', '51': 'n-queens', '55': 'jump-game',
+  '76': 'minimum-window-substring', '79': 'word-search', '84': 'largest-rectangle-in-histogram',
+  '98': 'validate-binary-search-tree', '102': 'binary-tree-level-order-traversal',
+  '104': 'maximum-depth-of-binary-tree', '121': 'best-time-to-buy-and-sell-stock',
+  '124': 'binary-tree-maximum-path-sum', '125': 'valid-palindrome', '127': 'word-ladder',
+  '128': 'longest-consecutive-sequence', '132': 'palindrome-partitioning-ii', '133': 'clone-graph',
+  '153': 'find-minimum-in-rotated-sorted-array', '167': 'two-sum-ii-input-array-is-sorted',
+  '198': 'house-robber', '200': 'number-of-islands', '206': 'reverse-linked-list',
+  '207': 'course-schedule', '208': 'implement-trie-prefix-tree', '212': 'word-search-ii',
+  '213': 'house-robber-ii', '217': 'contains-duplicate', '226': 'invert-binary-tree',
+  '230': 'kth-smallest-element-in-a-bst', '235': 'lowest-common-ancestor-of-a-binary-search-tree',
+  '242': 'valid-anagram', '295': 'find-median-from-data-stream', '297': 'serialize-and-deserialize-binary-tree',
+  '300': 'longest-increasing-subsequence', '322': 'coin-change', '417': 'pacific-atlantic-water-flow',
+  '424': 'longest-repeating-character-replacement', '572': 'subtree-of-another-tree',
+  '647': 'palindromic-substrings', '704': 'binary-search',
+};
+
 const buildUrl = (item) => {
   if (item.includes(':')) {
     const [platform, ...rest] = item.split(':');
@@ -14,6 +36,16 @@ const buildUrl = (item) => {
         const contestId = parts.slice(0, -1).join('-');
         return `https://codeforces.com/problemset/problem/${contestId}/${idx}`;
       }
+    }
+    if (platform === 'leetcode') {
+      const clean = id.replace(/^lc-/, '');
+      const slug = LC_SLUG_MAP[clean] || (!/^\d+$/.test(clean) ? clean : null);
+      if (slug) return `https://leetcode.com/problems/${slug}/`;
+      return `https://leetcode.com/problemset/all/?search=${clean}`;
+    }
+    if (platform === 'gfg') {
+      const clean = id.replace(/^gfg-/, '');
+      return `https://www.geeksforgeeks.org/${clean}/`;
     }
   }
   const parts = item.split('-');
