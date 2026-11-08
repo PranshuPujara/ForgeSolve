@@ -19,24 +19,82 @@ const MIN_COMPLETE_DATASET_SIZE = 500; // safety threshold to ensure complete pr
 
 let inFlightFetchPromise = null;
 
-// Official LeetCode tags with counts provided by the LeetCode taxonomy
+// Official 73 LeetCode tags, ordered descending by official question count
+// (nonexistent tags, typo duplicates like 'heap (1)', and non-LeetCode categories are removed)
 const OFFICIAL_LEETCODE_TAGS = [
-  'array', 'string', 'hash table', 'math', 'dynamic programming', 'sorting',
-  'greedy', 'binary search', 'depth-first search', 'database', 'bit manipulation',
-  'matrix', 'prefix sum', 'tree', 'two pointers', 'breadth-first search',
-  'heap (priority queue)', 'simulation', 'counting', 'graph theory', 'stack',
-  'binary tree', 'sliding window', 'enumeration', 'design', 'backtracking',
-  'number theory', 'union-find', 'segment tree', 'linked list', 'ordered set',
-  'monotonic stack', 'divide and conquer', 'combinatorics', 'trie', 'queue',
-  'bitmask', 'binary indexed tree', 'recursion', 'hash function', 'geometry',
-  'memoization', 'shortest path', 'binary search tree', 'topological sort',
-  'string matching', 'rolling hash', 'game theory', 'monotonic queue',
-  'interactive', 'data stream', 'brainteaser', 'merge sort', 'minimax',
-  'doubly-linked list', 'randomized', 'counting sort', 'iterator', 'concurrency',
-  'suffix array', 'quickselect', 'sweep line', 'probability and statistics',
-  'minimum spanning tree', 'bucket sort', 'shell', 'meet in the middle',
-  'reservoir sampling', 'eulerian circuit', 'radix sort',
-  'strongly connected component', 'rejection sampling', 'biconnected component', 'heap',
+  'array',
+  'string',
+  'hash table',
+  'math',
+  'dynamic programming',
+  'sorting',
+  'greedy',
+  'binary search',
+  'depth-first search',
+  'database',
+  'bit manipulation',
+  'matrix',
+  'prefix sum',
+  'tree',
+  'two pointers',
+  'breadth-first search',
+  'heap (priority queue)',
+  'simulation',
+  'counting',
+  'graph theory',
+  'stack',
+  'binary tree',
+  'sliding window',
+  'enumeration',
+  'design',
+  'backtracking',
+  'number theory',
+  'union-find',
+  'segment tree',
+  'linked list',
+  'ordered set',
+  'monotonic stack',
+  'divide and conquer',
+  'combinatorics',
+  'trie',
+  'queue',
+  'bitmask',
+  'binary indexed tree',
+  'recursion',
+  'hash function',
+  'geometry',
+  'memoization',
+  'shortest path',
+  'binary search tree',
+  'topological sort',
+  'string matching',
+  'rolling hash',
+  'game theory',
+  'monotonic queue',
+  'interactive',
+  'data stream',
+  'brainteaser',
+  'merge sort',
+  'minimax',
+  'doubly-linked list',
+  'randomized',
+  'counting sort',
+  'iterator',
+  'concurrency',
+  'suffix array',
+  'quickselect',
+  'sweep line',
+  'probability and statistics',
+  'minimum spanning tree',
+  'bucket sort',
+  'shell',
+  'meet in the middle',
+  'reservoir sampling',
+  'eulerian circuit',
+  'radix sort',
+  'strongly connected component',
+  'rejection sampling',
+  'biconnected component',
 ];
 
 const TAG_ALIASES = {
@@ -326,13 +384,43 @@ const refreshProblems = async () => {
 };
 
 /**
- * Get all unique tags from the problem pool, guaranteed to include all official LeetCode tags.
+ * Get all valid LeetCode tags, sorted descending by the number of matching questions in the pool.
+ * Only includes official LeetCode tags with >= 1 problem, removing nonexistent or non-LeetCode tags.
  */
 const getAllTags = async () => {
   const problems = await getAllProblems();
-  const tagSet = new Set(OFFICIAL_LEETCODE_TAGS);
-  problems.forEach(p => (p.tags || []).forEach(t => tagSet.add(t)));
-  return Array.from(tagSet).sort();
+  const allowedTagSet = new Set(OFFICIAL_LEETCODE_TAGS);
+
+  // Count occurrences of each valid tag across the problem pool
+  const tagCounts = new Map();
+  OFFICIAL_LEETCODE_TAGS.forEach(t => tagCounts.set(t, 0));
+
+  problems.forEach(p => {
+    (p.tags || []).forEach(t => {
+      const lower = t.toLowerCase();
+      if (allowedTagSet.has(lower)) {
+        tagCounts.set(lower, (tagCounts.get(lower) || 0) + 1);
+      }
+    });
+  });
+
+  // Keep only official tags that actually have matching problems, sorted descending by question count
+  const sorted = OFFICIAL_LEETCODE_TAGS
+    .filter(tag => (tagCounts.get(tag) || 0) > 0)
+    .sort((a, b) => {
+      const diff = (tagCounts.get(b) || 0) - (tagCounts.get(a) || 0);
+      if (diff !== 0) return diff;
+      return a.localeCompare(b);
+    });
+
+  // If in static fallback mode with a smaller dataset, append the remaining official tags in popularity order
+  if (sorted.length < OFFICIAL_LEETCODE_TAGS.length && problems.length < 500) {
+    const included = new Set(sorted);
+    const remaining = OFFICIAL_LEETCODE_TAGS.filter(t => !included.has(t));
+    return [...sorted, ...remaining];
+  }
+
+  return sorted;
 };
 
 /**

@@ -139,3 +139,19 @@ test('Scenario 8: Empty cache falls back gracefully to static dataset with short
   assert.strictEqual(result[0].id, 'lc-1');
   cache.del('leetcode_problemset');
 });
+
+test('Scenario 9: getAllTags returns official tags sorted by question count and excludes nonexistent tags', async () => {
+  const problems = generateMockProblems(600);
+  cache.set('leetcode_problemset', problems, 3600);
+
+  const { getAllTags } = require('../services/leetcodeService');
+  const tags = await getAllTags();
+
+  assert.ok(tags.length > 0, 'Tags must not be empty');
+  // 'array' was assigned to half the problems, so it must be first
+  assert.strictEqual(tags[0], 'array', 'Most frequent tag must be first');
+  // 'heap' (duplicate) should not be present
+  assert.strictEqual(tags.includes('heap'), false, "Redundant 'heap' must be excluded in favor of 'heap (priority queue)'");
+  cache.del('leetcode_problemset');
+});
+
