@@ -14,6 +14,11 @@ const PROBLEMS_CACHE_KEY = 'leetcode_problemset';
 const USER_CACHE_PREFIX = 'lc:user:';
 const STATS_CACHE_PREFIX = 'lc:stats:';
 
+const STATIC_FALLBACK_TTL = 30; // seconds - short TTL on error so subsequent requests can retry live
+const MIN_COMPLETE_DATASET_SIZE = 500; // safety threshold to ensure complete problemset
+
+let inFlightFetchPromise = null;
+
 const getBaseUrl = () => process.env.LEETCODE_API_BASE_URL || 'http://localhost:3001';
 const getCacheTtl = () => parseInt(process.env.LEETCODE_CACHE_TTL_SECONDS, 10) || 3600;
 const getUserCacheTtl = () => parseInt(process.env.LEETCODE_USER_CACHE_TTL_SECONDS, 10) || 600;
@@ -83,59 +88,126 @@ const STATIC_PROBLEMS = [
 ];
 
 /**
- * Fetch all problems from upstream alfa-leetcode-api, paginating up to 50 pages (page size 100).
- * Note: alfa-leetcode-api caps limit at 100 questions per request.
+ * Retry helper for page requests.
+ */
+async function fetchPageWithRetry(baseUrl, skip, limit, retries = 2) {
+  const maxRetries = process.env.NODE_ENV === 'test' ? 0 : retries;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await axios.get(`${baseUrl}/problems`, {
+        params: { limit, skip },
+        timeout: process.env.NODE_ENV === 'test' ? 2000 : 25000,
+      });
+      return res.data || {};
+    } catch (err) {
+      if (attempt >= maxRetries) {
+        throw new Error(`Failed to fetch page (skip=${skip}, limit=${limit}): ${err.message}`);
+      }
+      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
+}
+
+/**
+ * Normalize an upstream LeetCode question object into ForgeSolve's canonical format.
+ */
+function normalizeQuestion(q) {
+  if (!q || q.paidOnly || q.isPaidOnly) return null;
+  const qId = String(q.questionFrontendId || q.frontendQuestionId || q.questionId || '').trim();
+  if (!qId || !q.titleSlug) return null;
+
+  const tags = (q.topicTags || []).map(t => {
+    if (typeof t === 'string') return t.trim().toLowerCase();
+    return (t.name || t.slug || '').trim().toLowerCase();
+  }).filter(Boolean);
+
+  return {
+    id: `lc-${qId}`,
+    questionId: qId,
+    titleSlug: q.titleSlug,
+    name: q.title || q.name || q.titleSlug,
+    difficulty: (q.difficulty || 'medium').toLowerCase(),
+    tags,
+    url: `https://leetcode.com/problems/${q.titleSlug}/`,
+    platform: 'leetcode',
+    rating: null,
+    solvedCount: 0,
+    isPaidOnly: false,
+  };
+}
+
+/**
+ * Fetch all problems from upstream alfa-leetcode-api, paginating up to 60 pages (page size 100).
+ * Handles pagination using `limit` and `skip`, concurrent batches of 4, and per-page retries.
  */
 async function fetchFromLiveApi() {
-  const problems = [];
-  const seenIds = new Set();
+  const baseUrl = getBaseUrl();
   const limit = 100;
-  let skip = 0;
-  let page = 0;
-  const maxPages = 50;
+  const maxPages = 60; // Safely covers up to 6,000 problems
 
-  while (page < maxPages) {
-    const res = await axios.get(`${getBaseUrl()}/problems`, {
-      params: { limit, skip },
-      timeout: 15000,
-    });
+  const t0 = Date.now();
+  console.log(`[LC] Starting problemset fetch from ${baseUrl}/problems (limit=${limit})`);
 
-    const data = res.data || {};
-    const questions = data.problemsetQuestionList || [];
-    if (!questions.length) break;
+  // Step 1: Fetch initial page to discover total available questions
+  const page0Data = await fetchPageWithRetry(baseUrl, 0, limit);
+  const totalQuestions = parseInt(page0Data.totalQuestions, 10) || 0;
+  const initialQuestions = page0Data.problemsetQuestionList || [];
 
-    for (const q of questions) {
-      if (q.paidOnly || q.isPaidOnly) continue;
-      const qId = String(q.questionFrontendId || q.frontendQuestionId || q.questionId);
-      const id = `lc-${qId}`;
-      if (seenIds.has(id)) continue;
-      seenIds.add(id);
-
-      problems.push({
-        id,
-        questionId: qId,
-        titleSlug: q.titleSlug,
-        name: q.title || q.name,
-        difficulty: (q.difficulty || 'medium').toLowerCase(),
-        tags: (q.topicTags || []).map(t => {
-          if (typeof t === 'string') return t.toLowerCase();
-          return (t.name || t.slug || '').toLowerCase();
-        }).filter(Boolean),
-        url: `https://leetcode.com/problems/${q.titleSlug}/`,
-        platform: 'leetcode',
-        rating: null,
-        solvedCount: 0,
-        isPaidOnly: false,
-      });
-    }
-
-    skip += questions.length;
-    page++;
-
-    if (data.totalQuestions && skip >= data.totalQuestions) break;
-    if (questions.length < limit) break;
+  if (!initialQuestions.length && totalQuestions === 0) {
+    throw new Error('Upstream LeetCode API returned empty problem list');
   }
 
+  const allRawQuestions = [...initialQuestions];
+  let batchesCount = 1;
+
+  // Step 2: Determine remaining pages and fetch with concurrency
+  if (totalQuestions > 0) {
+    const totalPages = Math.min(Math.ceil(totalQuestions / limit), maxPages);
+    const skips = [];
+    for (let p = 1; p < totalPages; p++) {
+      skips.push(p * limit);
+    }
+
+    const concurrency = 4;
+    for (let i = 0; i < skips.length; i += concurrency) {
+      const batch = skips.slice(i, i + concurrency);
+      batchesCount += batch.length;
+      const results = await Promise.all(
+        batch.map(skip => fetchPageWithRetry(baseUrl, skip, limit))
+      );
+      for (const res of results) {
+        const qList = res.problemsetQuestionList || [];
+        if (qList.length > 0) {
+          allRawQuestions.push(...qList);
+        }
+      }
+    }
+  } else {
+    // Fallback if totalQuestions is not provided
+    let page = 1;
+    while (page < maxPages) {
+      batchesCount++;
+      const res = await fetchPageWithRetry(baseUrl, page * limit, limit);
+      const qList = res.problemsetQuestionList || [];
+      if (!qList.length) break;
+      allRawQuestions.push(...qList);
+      if (qList.length < limit) break;
+      page++;
+    }
+  }
+
+  // Step 3: Normalize and deduplicate by canonical id
+  const seenIds = new Set();
+  const problems = [];
+  for (const q of allRawQuestions) {
+    const normalized = normalizeQuestion(q);
+    if (!normalized) continue;
+    if (seenIds.has(normalized.id)) continue;
+    seenIds.add(normalized.id);
+    problems.push(normalized);
+  }
+
+  // Step 4: Deterministic sort by questionId
   problems.sort((a, b) => {
     const numA = parseInt(a.questionId, 10);
     const numB = parseInt(b.questionId, 10);
@@ -143,34 +215,76 @@ async function fetchFromLiveApi() {
     return a.questionId.localeCompare(b.questionId);
   });
 
+  const durationMs = Date.now() - t0;
+  console.log(
+    `[LC] Live fetch complete: ${allRawQuestions.length} raw questions in ${batchesCount} batches, ` +
+    `${problems.length} unique free problems in ${durationMs}ms`
+  );
+
   return problems;
 }
 
 /**
- * Get all LeetCode problems with caching and fallback.
+ * Get all LeetCode problems with SingleFlight request deduplication,
+ * safe fallback, and cache protection.
  */
 const getAllProblems = async () => {
   const cached = cache.get(PROBLEMS_CACHE_KEY);
-  if (cached) return cached;
+  if (cached && Array.isArray(cached) && cached.length >= MIN_COMPLETE_DATASET_SIZE) {
+    return cached;
+  }
 
   if (process.env.LEETCODE_USE_STATIC === 'true') {
+    console.log(`[LC] LEETCODE_USE_STATIC is set to true; using static dataset (${STATIC_PROBLEMS.length} problems)`);
     cache.set(PROBLEMS_CACHE_KEY, STATIC_PROBLEMS, getCacheTtl());
     return STATIC_PROBLEMS;
   }
 
-  try {
-    const problems = await fetchFromLiveApi();
-    if (!problems.length) {
-      throw new Error('Empty problem list returned from upstream');
-    }
-    console.log(`[LC] Fetched ${problems.length} free problems`);
-    cache.set(PROBLEMS_CACHE_KEY, problems, getCacheTtl());
-    return problems;
-  } catch (err) {
-    console.log(`[LC] live API failed, using static (${STATIC_PROBLEMS.length} problems): ${err.message}`);
-    cache.set(PROBLEMS_CACHE_KEY, STATIC_PROBLEMS, getCacheTtl());
-    return STATIC_PROBLEMS;
+  // SingleFlight: deduplicate concurrent in-flight fetches
+  if (inFlightFetchPromise) {
+    return inFlightFetchPromise;
   }
+
+  inFlightFetchPromise = (async () => {
+    try {
+      const problems = await fetchFromLiveApi();
+      if (!problems || problems.length < MIN_COMPLETE_DATASET_SIZE) {
+        throw new Error(
+          `Incomplete dataset from upstream: fetched ${problems ? problems.length : 0} problems (expected >= ${MIN_COMPLETE_DATASET_SIZE})`
+        );
+      }
+
+      cache.set(PROBLEMS_CACHE_KEY, problems, getCacheTtl());
+      console.log(`[LC] Cached ${problems.length} free problems for ${getCacheTtl()}s`);
+      return problems;
+    } catch (err) {
+      console.warn(`[LC] Live API fetch failed: ${err.message}`);
+
+      // If we already have a previous valid complete dataset, NEVER overwrite it with static
+      const existing = cache.get(PROBLEMS_CACHE_KEY);
+      if (existing && Array.isArray(existing) && existing.length >= MIN_COMPLETE_DATASET_SIZE) {
+        console.log(`[LC] Preserving existing cached dataset (${existing.length} problems)`);
+        return existing;
+      }
+
+      // No previous valid cache exists: use static fallback with short TTL so retries happen soon
+      console.log(`[LC] Falling back to static dataset (${STATIC_PROBLEMS.length} problems, TTL=${STATIC_FALLBACK_TTL}s)`);
+      cache.set(PROBLEMS_CACHE_KEY, STATIC_PROBLEMS, STATIC_FALLBACK_TTL);
+      return STATIC_PROBLEMS;
+    } finally {
+      inFlightFetchPromise = null;
+    }
+  })();
+
+  return inFlightFetchPromise;
+};
+
+/**
+ * Force refresh the problems cache.
+ */
+const refreshProblems = async () => {
+  cache.del(PROBLEMS_CACHE_KEY);
+  return getAllProblems();
 };
 
 /**
@@ -350,6 +464,7 @@ const getUserStats = async (username) => {
 
 module.exports = {
   getAllProblems,
+  refreshProblems,
   getAllTags,
   getUserSolvedSlugs,
   getUserStats,

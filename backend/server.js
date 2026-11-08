@@ -59,4 +59,16 @@ app.listen(PORT, () => {
   const lcMode = process.env.LEETCODE_USE_STATIC === 'true' ? 'static' : 'live';
   console.log(`🚀 Problem Picker backend running on port ${PORT}`);
   console.log(`[LC] LeetCode mode: ${lcMode}`);
+
+  // Warm LeetCode cache eagerly on startup
+  if (process.env.LEETCODE_USE_STATIC !== 'true') {
+    const { getAllProblems } = require('./services/leetcodeService');
+    getAllProblems()
+      .then(problems => {
+        console.log(`[LC] Startup cache pre-warmed: ${problems.length} problems ready`);
+      })
+      .catch(err => {
+        console.warn(`[LC] Startup cache pre-warm warning: ${err.message}`);
+      });
+  }
 });

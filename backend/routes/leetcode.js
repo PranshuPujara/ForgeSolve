@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const {
+  getAllProblems,
+  refreshProblems,
   getAllTags,
   getUserSolvedSlugs,
   getUserStats,
@@ -46,6 +48,36 @@ router.get('/user/:username/stats', userRateLimiter, async (req, res, next) => {
     const { username } = req.params;
     const stats = await getUserStats(username);
     res.json(stats);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/leetcode/status
+router.get('/status', async (req, res, next) => {
+  try {
+    const problems = await getAllProblems();
+    res.json({
+      platform: 'leetcode',
+      totalProblems: problems.length,
+      mode: process.env.LEETCODE_USE_STATIC === 'true' ? 'static' : (problems.length < 500 ? 'fallback-static' : 'live'),
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/leetcode/refresh
+router.post('/refresh', async (req, res, next) => {
+  try {
+    const problems = await refreshProblems();
+    res.json({
+      success: true,
+      totalProblems: problems.length,
+      mode: process.env.LEETCODE_USE_STATIC === 'true' ? 'static' : (problems.length < 500 ? 'fallback-static' : 'live'),
+      timestamp: new Date().toISOString(),
+    });
   } catch (err) {
     next(err);
   }
