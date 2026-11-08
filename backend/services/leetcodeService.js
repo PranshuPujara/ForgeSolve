@@ -19,6 +19,39 @@ const MIN_COMPLETE_DATASET_SIZE = 500; // safety threshold to ensure complete pr
 
 let inFlightFetchPromise = null;
 
+// Official LeetCode tags with counts provided by the LeetCode taxonomy
+const OFFICIAL_LEETCODE_TAGS = [
+  'array', 'string', 'hash table', 'math', 'dynamic programming', 'sorting',
+  'greedy', 'binary search', 'depth-first search', 'database', 'bit manipulation',
+  'matrix', 'prefix sum', 'tree', 'two pointers', 'breadth-first search',
+  'heap (priority queue)', 'simulation', 'counting', 'graph theory', 'stack',
+  'binary tree', 'sliding window', 'enumeration', 'design', 'backtracking',
+  'number theory', 'union-find', 'segment tree', 'linked list', 'ordered set',
+  'monotonic stack', 'divide and conquer', 'combinatorics', 'trie', 'queue',
+  'bitmask', 'binary indexed tree', 'recursion', 'hash function', 'geometry',
+  'memoization', 'shortest path', 'binary search tree', 'topological sort',
+  'string matching', 'rolling hash', 'game theory', 'monotonic queue',
+  'interactive', 'data stream', 'brainteaser', 'merge sort', 'minimax',
+  'doubly-linked list', 'randomized', 'counting sort', 'iterator', 'concurrency',
+  'suffix array', 'quickselect', 'sweep line', 'probability and statistics',
+  'minimum spanning tree', 'bucket sort', 'shell', 'meet in the middle',
+  'reservoir sampling', 'eulerian circuit', 'radix sort',
+  'strongly connected component', 'rejection sampling', 'biconnected component', 'heap',
+];
+
+const TAG_ALIASES = {
+  'depth-first search': 'dfs',
+  'dfs': 'depth-first search',
+  'breadth-first search': 'bfs',
+  'bfs': 'breadth-first search',
+  'union-find': 'union find',
+  'union find': 'union-find',
+  'heap (priority queue)': 'heap',
+  'heap': 'heap (priority queue)',
+  'doubly-linked list': 'doubly linked list',
+  'doubly linked list': 'doubly-linked list',
+};
+
 const getBaseUrl = () => process.env.LEETCODE_API_BASE_URL || 'http://localhost:3001';
 const getCacheTtl = () => parseInt(process.env.LEETCODE_CACHE_TTL_SECONDS, 10) || 3600;
 const getUserCacheTtl = () => parseInt(process.env.LEETCODE_USER_CACHE_TTL_SECONDS, 10) || 600;
@@ -116,10 +149,15 @@ function normalizeQuestion(q) {
   const qId = String(q.questionFrontendId || q.frontendQuestionId || q.questionId || '').trim();
   if (!qId || !q.titleSlug) return null;
 
-  const tags = (q.topicTags || []).map(t => {
-    if (typeof t === 'string') return t.trim().toLowerCase();
-    return (t.name || t.slug || '').trim().toLowerCase();
-  }).filter(Boolean);
+  const tagSet = new Set();
+  (q.topicTags || []).forEach(t => {
+    const raw = (typeof t === 'string' ? t : (t.name || t.slug || '')).trim().toLowerCase();
+    if (!raw) return;
+    tagSet.add(raw);
+    if (TAG_ALIASES[raw]) {
+      tagSet.add(TAG_ALIASES[raw]);
+    }
+  });
 
   return {
     id: `lc-${qId}`,
@@ -127,7 +165,7 @@ function normalizeQuestion(q) {
     titleSlug: q.titleSlug,
     name: q.title || q.name || q.titleSlug,
     difficulty: (q.difficulty || 'medium').toLowerCase(),
-    tags,
+    tags: Array.from(tagSet),
     url: `https://leetcode.com/problems/${q.titleSlug}/`,
     platform: 'leetcode',
     rating: null,
@@ -288,11 +326,11 @@ const refreshProblems = async () => {
 };
 
 /**
- * Get all unique tags from the problem pool.
+ * Get all unique tags from the problem pool, guaranteed to include all official LeetCode tags.
  */
 const getAllTags = async () => {
   const problems = await getAllProblems();
-  const tagSet = new Set();
+  const tagSet = new Set(OFFICIAL_LEETCODE_TAGS);
   problems.forEach(p => (p.tags || []).forEach(t => tagSet.add(t)));
   return Array.from(tagSet).sort();
 };
@@ -469,4 +507,5 @@ module.exports = {
   getUserSolvedSlugs,
   getUserStats,
   STATIC_PROBLEMS,
+  OFFICIAL_LEETCODE_TAGS,
 };
