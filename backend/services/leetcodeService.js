@@ -391,6 +391,11 @@ const getAllTags = async () => {
   const problems = await getAllProblems();
   const allowedTagSet = new Set(OFFICIAL_LEETCODE_TAGS);
 
+  if (!problems || problems.length < 500) {
+    // Return official tags in canonical LeetCode question-count order
+    return [...OFFICIAL_LEETCODE_TAGS];
+  }
+
   // Count occurrences of each valid tag across the problem pool
   const tagCounts = new Map();
   OFFICIAL_LEETCODE_TAGS.forEach(t => tagCounts.set(t, 0));
@@ -405,22 +410,13 @@ const getAllTags = async () => {
   });
 
   // Keep only official tags that actually have matching problems, sorted descending by question count
-  const sorted = OFFICIAL_LEETCODE_TAGS
+  return OFFICIAL_LEETCODE_TAGS
     .filter(tag => (tagCounts.get(tag) || 0) > 0)
     .sort((a, b) => {
       const diff = (tagCounts.get(b) || 0) - (tagCounts.get(a) || 0);
       if (diff !== 0) return diff;
       return a.localeCompare(b);
     });
-
-  // If in static fallback mode with a smaller dataset, append the remaining official tags in popularity order
-  if (sorted.length < OFFICIAL_LEETCODE_TAGS.length && problems.length < 500) {
-    const included = new Set(sorted);
-    const remaining = OFFICIAL_LEETCODE_TAGS.filter(t => !included.has(t));
-    return [...sorted, ...remaining];
-  }
-
-  return sorted;
 };
 
 /**

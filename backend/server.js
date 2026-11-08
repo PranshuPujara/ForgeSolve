@@ -55,7 +55,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   const lcMode = process.env.LEETCODE_USE_STATIC === 'true' ? 'static' : 'live';
   console.log(`🚀 Problem Picker backend running on port ${PORT}`);
   console.log(`[LC] LeetCode mode: ${lcMode}`);
@@ -71,4 +71,19 @@ app.listen(PORT, () => {
         console.warn(`[LC] Startup cache pre-warm warning: ${err.message}`);
       });
   }
+});
+
+// Graceful shutdown handling for nodemon restarts and termination
+process.once('SIGUSR2', () => {
+  server.close(() => {
+    process.kill(process.pid, 'SIGUSR2');
+  });
+});
+
+process.on('SIGINT', () => {
+  server.close(() => process.exit(0));
+});
+
+process.on('SIGTERM', () => {
+  server.close(() => process.exit(0));
 });
