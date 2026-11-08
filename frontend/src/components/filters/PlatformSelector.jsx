@@ -1,9 +1,9 @@
 import { BarChart2, Braces, Binary } from 'lucide-react';
 
 const PLATFORMS = [
-  { id:'codeforces', label:'Codeforces', icon:BarChart2, desc:'Live API · Friend mode · 8k+ problems', color:'#3b82f6' },
-  { id:'leetcode',   label:'LeetCode',   icon:Braces,    desc:'Interview focused · curated 50+',       color:'#f59e0b' },
-  { id:'gfg',        label:'GFG',        icon:Binary,    desc:'DSA classics · interview prep',         color:'#10b981' },
+  { id:'codeforces', label:'Codeforces', icon:BarChart2, desc:'Live API · Friend Mode · 8K+ Problems', color:'#3b82f6' },
+  { id:'leetcode',   label:'LeetCode',   icon:Braces,    desc:'Live API · Interview Prep · 3K+ Problems', color:'#f59e0b' },
+  { id:'gfg',        label:'GFG',        icon:Binary,    desc:'DSA Classics · Interview Prep',         color:'#10b981' },
 ];
 
 export const PlatformSelector = ({ value, onChange }) => (
