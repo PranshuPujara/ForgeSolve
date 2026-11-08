@@ -19,13 +19,17 @@ api.interceptors.response.use(
   }
 );
 
-export const pickProblem     = p  => api.post('/problems/pick',  p);
-export const getDailyProblem = p  => api.post('/problems/daily', p);
-export const reattemptProblem = p => api.post('/problems/reattempt', p);
-export const getTags         = pl => api.get(`/problems/tags?platform=${pl}`);
-export const getFriendsSolved= h  => api.post('/codeforces/friends/solved', { handles: h });
-export const validateHandle  = h  => api.get(`/codeforces/user/${h}/solved`);
+export const pickProblem       = p  => api.post('/problems/pick',  p);
+export const getDailyProblem   = p  => api.post('/problems/daily', p);
+export const reattemptProblem  = p  => api.post('/problems/reattempt', p);
+export const getTags           = pl => api.get(`/problems/tags?platform=${pl}`);
+export const getFriendsSolved  = h  => api.post('/codeforces/friends/solved', { handles: h });
+export const validateHandle    = h  => api.get(`/codeforces/user/${h}/solved`);
+export const getUserStats      = h  => api.get(`/codeforces/user/${h}/stats`);
+
+// LeetCode API methods
+export const validateLCUser    = u  => api.get(`/leetcode/user/${u}/solved`);
+export const getLCUserStats    = u  => api.get(`/leetcode/user/${u}/stats`);
+export const getLCTags         = () => api.get('/leetcode/tags');
 
 export default api;
-
-export const getUserStats = h => api.get(`/codeforces/user/${h}/stats`);
