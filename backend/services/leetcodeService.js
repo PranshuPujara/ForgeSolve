@@ -83,12 +83,13 @@ const STATIC_PROBLEMS = [
 ];
 
 /**
- * Fetch all problems from upstream alfa-leetcode-api, paginating up to 50 pages (page size 250).
+ * Fetch all problems from upstream alfa-leetcode-api, paginating up to 50 pages (page size 100).
+ * Note: alfa-leetcode-api caps limit at 100 questions per request.
  */
 async function fetchFromLiveApi() {
   const problems = [];
   const seenIds = new Set();
-  const limit = 250;
+  const limit = 100;
   let skip = 0;
   let page = 0;
   const maxPages = 50;
@@ -105,7 +106,7 @@ async function fetchFromLiveApi() {
 
     for (const q of questions) {
       if (q.paidOnly || q.isPaidOnly) continue;
-      const qId = String(q.frontendQuestionId || q.questionId);
+      const qId = String(q.questionFrontendId || q.frontendQuestionId || q.questionId);
       const id = `lc-${qId}`;
       if (seenIds.has(id)) continue;
       seenIds.add(id);
@@ -114,9 +115,12 @@ async function fetchFromLiveApi() {
         id,
         questionId: qId,
         titleSlug: q.titleSlug,
-        name: q.title,
+        name: q.title || q.name,
         difficulty: (q.difficulty || 'medium').toLowerCase(),
-        tags: (q.topicTags || []).map(t => (t.name || t.slug || t).toLowerCase()),
+        tags: (q.topicTags || []).map(t => {
+          if (typeof t === 'string') return t.toLowerCase();
+          return (t.name || t.slug || '').toLowerCase();
+        }).filter(Boolean),
         url: `https://leetcode.com/problems/${q.titleSlug}/`,
         platform: 'leetcode',
         rating: null,
