@@ -30,6 +30,9 @@ const D = {
   smartMode: saved.smartMode || false,
 };
 
+const SIDEBAR_MIN_WIDTH = 304;
+const SIDEBAR_MAX_WIDTH = 520;
+
 const useReady = (platform, minRating, maxRating, difficulty) => {
   const hasPlatform = !!platform;
   const hasDifficulty = platform === 'codeforces'
@@ -131,6 +134,12 @@ export default function App() {
   const [friends, setFriends] = useState(() => storage.get('friends', []));
   const [histKey, setHistKey] = useState(0);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const savedWidth = storage.get('sidebar_width', 380);
+    return Number.isFinite(savedWidth)
+      ? Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, savedWidth))
+      : 380;
+  });
   const [activePanel, setActivePanel] = useState('discover'); // 'discover' | 'profile' | 'history'
   const [reattemptId, setReattemptId] = useState(null); // tracks active re-attempt for banner
   const mainRef = useRef(null);
@@ -151,6 +160,33 @@ export default function App() {
   useEffect(() => { storage.set('showOnlySolved', showOnlySolved); }, [showOnlySolved]);
   useEffect(() => { storage.set('lcExcludeSolved', lcExcludeSolved); }, [lcExcludeSolved]);
   useEffect(() => { storage.set('lcShowOnlySolved', lcShowOnlySolved); }, [lcShowOnlySolved]);
+  useEffect(() => { storage.set('sidebar_width', sidebarWidth); }, [sidebarWidth]);
+
+  const startSidebarResize = useCallback((event) => {
+    if (window.innerWidth <= 768) return;
+
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = sidebarWidth;
+    document.body.classList.add('sidebar-resizing');
+
+    const resize = (moveEvent) => {
+      const nextWidth = startWidth + moveEvent.clientX - startX;
+      setSidebarWidth(Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, nextWidth)));
+    };
+    const stopResize = () => {
+      document.body.classList.remove('sidebar-resizing');
+      window.removeEventListener('pointermove', resize);
+      window.removeEventListener('pointerup', stopResize);
+    };
+
+    window.addEventListener('pointermove', resize);
+    window.addEventListener('pointerup', stopResize, { once: true });
+  }, [sidebarWidth]);
+
+  const adjustSidebarWidth = useCallback((delta) => {
+    setSidebarWidth(width => Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width + delta)));
+  }, []);
 
   const changePlatform = useCallback(p => {
     setPlatform(p); setTags([]); setDifficulty(null); setFilterMode('none'); clear();
@@ -505,7 +541,7 @@ export default function App() {
           onClick={e => e.stopPropagation()}
           onTouchStart={e => e.stopPropagation()}
           style={{
-            width: 380, flexShrink: 0,
+            width: sidebarWidth, flexShrink: 0,
             borderRight: '1px solid var(--b0)',
             background: 'var(--bg)',
             height: '100%', overflowY: 'auto',
@@ -515,6 +551,25 @@ export default function App() {
           }}>
           {sidebarJSX}
         </aside>
+        <div
+          className="sidebar-resizer"
+          role="separator"
+          aria-label="Resize filters sidebar"
+          aria-orientation="vertical"
+          aria-valuemin={SIDEBAR_MIN_WIDTH}
+          aria-valuemax={SIDEBAR_MAX_WIDTH}
+          aria-valuenow={sidebarWidth}
+          tabIndex={0}
+          onPointerDown={startSidebarResize}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowLeft') { event.preventDefault(); adjustSidebarWidth(-16); }
+            if (event.key === 'ArrowRight') { event.preventDefault(); adjustSidebarWidth(16); }
+            if (event.key === 'Home') { event.preventDefault(); setSidebarWidth(SIDEBAR_MIN_WIDTH); }
+            if (event.key === 'End') { event.preventDefault(); setSidebarWidth(SIDEBAR_MAX_WIDTH); }
+          }}
+        >
+          <span />
+        </div>
 
         {/* Main content */}
         <main ref={mainRef}

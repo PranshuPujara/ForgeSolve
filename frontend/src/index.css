@@ -475,7 +475,56 @@ button:active, a.btn:active { transform: scale(0.98); }
 /* Sidebar drawer scroll padding — keeps last item (e.g. Friends list) above the mobile tab bar */
 .sidebar-scroll { padding-bottom: 20px; }
 
+/* Desktop-only filter rail. Mobile keeps the original slide-out drawer. */
+.sidebar-resizer {
+  position: relative;
+  z-index: 20;
+  flex: 0 0 14px;
+  margin-left: -7px;
+  cursor: col-resize;
+  outline: none;
+  touch-action: none;
+}
+.sidebar-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 6px;
+  width: 1px;
+  background: var(--b1);
+  transition: background .18s ease, box-shadow .18s ease;
+}
+.sidebar-resizer span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 44px;
+  border-radius: 99px;
+  background: var(--b3);
+  box-shadow: 0 -10px var(--b3), 0 10px var(--b3);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition: opacity .18s ease, background .18s ease, box-shadow .18s ease;
+}
+.sidebar-resizer:hover::before,
+.sidebar-resizer:focus-visible::before,
+body.sidebar-resizing .sidebar-resizer::before {
+  background: var(--primary);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--primary) 52%, transparent);
+}
+.sidebar-resizer:hover span,
+.sidebar-resizer:focus-visible span,
+body.sidebar-resizing .sidebar-resizer span {
+  opacity: 1;
+  background: var(--primary);
+  box-shadow: 0 -10px var(--primary), 0 10px var(--primary), 0 0 12px color-mix(in srgb, var(--primary) 55%, transparent);
+}
+body.sidebar-resizing { cursor: col-resize; user-select: none; }
+
 @media (max-width: 768px) {
+  .sidebar-resizer { display: none; }
   .mob-nav { display: block; }
   /* Bottom padding clears the fixed tab bar (62px row + 16px breathing) */
   .main-pad-mobile { padding-bottom: calc(78px + env(safe-area-inset-bottom)) !important; }
