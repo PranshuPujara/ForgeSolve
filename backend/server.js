@@ -7,6 +7,7 @@ const problemsRouter = require('./routes/problems');
 const codeforcesRouter = require('./routes/codeforces');
 const leetcodeRouter = require('./routes/leetcode');
 const healthRouter = require('./routes/health');
+const solveRouter = require('./routes/solve');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -56,6 +57,7 @@ app.use('/api/health', healthRouter);
 app.use('/api/problems', problemsRouter);
 app.use('/api/codeforces', codeforcesRouter);
 app.use('/api/leetcode', leetcodeRouter);
+app.use('/api/solve', solveRouter);
 
 // Global error handler
 app.use((err, req, res, next) => {

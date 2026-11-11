@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, memo, useMemo } from 'react';
-import { Zap, Menu, X, Compass, User, History, CalendarDays, AlertCircle, ChevronDown, Swords, SlidersHorizontal, Heart } from 'lucide-react';
+import { Menu, X, Compass, User, History, AlertCircle, ChevronDown, Swords, SlidersHorizontal, Heart } from 'lucide-react';
 import { storage, getLastRating } from './utils/localStorage';
 import { useProblemPicker } from './hooks/useProblemPicker';
 import { useUserHandle } from './hooks/useUserHandle';
@@ -15,8 +15,11 @@ import { HistoryPanel } from './components/history/HistoryPanel';
 
 import { StreakBadge } from './components/ui/StreakBadge';
 import { SmartModeToggle } from './components/ui/SmartModeToggle';
-import { EmptyState } from './components/ui/EmptyState';
 import { ErrorMessage } from './components/ui/ErrorMessage';
+import { ForgeConsole } from './components/discover/ForgeConsole';
+import { ForgeStagePanel } from './components/discover/ForgeStagePanel';
+import { useForgeSession } from './hooks/useForgeSession';
+import { useArmory } from './hooks/useArmory';
 
 /* ── Saved defaults ─────────────────────────────── */
 const saved = storage.get('filters', {});
@@ -152,6 +155,20 @@ export default function App() {
 
   const { problem, loading, error, meta, noFriendMatch, pick, reattempt, fetchDaily, clear } = useProblemPicker();
   const { ready, hasPlatform, hasDifficulty } = useReady(platform, minRating, maxRating, difficulty);
+  const armory = useArmory();
+  const rawHandle =
+    platform === 'leetcode' ? (userHandle.lcStatus === 'ok' ? userHandle.lcHandle : null)
+    : platform === 'codeforces' ? (userHandle.status === 'ok' ? userHandle.handle : null)
+    : null;
+  const forge = useForgeSession({
+    problem,
+    handle: rawHandle,
+    platform,
+    onAccepted: (r, p) => armory.add({
+      id: p.id, name: p.name, platform: p.platform, url: p.url,
+      weapon: r.weapon, grade: r.grade, seconds: r.seconds,
+    }),
+  });
 
   useEffect(() => {
     storage.set('filters', { platform, tags, minRating, maxRating, difficulty, filterMode, smartMode });
@@ -267,6 +284,20 @@ export default function App() {
     : !hasDifficulty
       ? (platform === 'codeforces' ? 'Set a valid rating range' : 'Pick a difficulty')
       : null;
+  const showHero = !problem && !error;
+  const applyPreset = useCallback(({ vals, tags: presetTags }) => {
+    changeDifficulty(vals);
+    setTags(presetTags);
+  }, [changeDifficulty]);
+  const excludeActive = platform === 'leetcode'
+    ? lcExcludeSolved && userHandle.lcStatus === 'ok'
+    : excludeSolved && userHandle.status === 'ok';
+  const onlyActive = platform === 'leetcode'
+    ? lcShowOnlySolved && userHandle.lcStatus === 'ok'
+    : showOnlySolved && userHandle.status === 'ok';
+  const activeHandle = platform === 'leetcode'
+    ? (userHandle.lcStatus === 'ok' ? `@${userHandle.lcHandle}` : null)
+    : (userHandle.status === 'ok' ? `@${userHandle.handle}` : null);
 
   /* ── Sidebar filter content — rendered as JSX, not as a component type ── */
   const filterContentJSX = (
@@ -591,28 +622,27 @@ export default function App() {
             {activePanel === 'discover' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }} className="panel-in">
 
-                {/* Filter summary */}
-                <div style={{
-                  display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center',
-                  padding: '10px 15px', borderRadius: 10, background: 'var(--bg-card)', border: '1px solid var(--b1)',
-                  fontSize: 12, fontFamily: 'var(--mono)'
-                }}>
-                  <span style={{ color: platform === 'leetcode' ? 'var(--orange)' : 'var(--primary)', fontWeight: 700 }}>{platform}</span>
-                  <span style={{ color: 'var(--b2)' }}>·</span>
-                  {platform === 'codeforces'
-                    ? <span style={{ color: 'var(--t2)', fontWeight: 600 }}>{minRating === maxRating ? `exact ${minRating}` : `${minRating}–${maxRating}`}</span>
-                    : difficulty
-                      ? <span style={{ color: 'var(--t2)', textTransform: 'capitalize', fontWeight: 600 }}>{difficulty}</span>
-                      : <span style={{ color: 'var(--t3)' }}>—</span>
-                  }
-                  {tags.length > 0 && <><span style={{ color: 'var(--b2)' }}>·</span><span style={{ color: 'var(--t2)', fontWeight: 600 }}>{tags.slice(0, 2).join(', ')}{tags.length > 2 ? ` +${tags.length - 2}` : ''}</span></>}
-                  {platform === 'codeforces' && filterMode !== 'none' && <><span style={{ color: 'var(--b2)' }}>·</span><span style={{ color: 'var(--primary)', fontWeight: 700 }}>{filterMode}</span></>}
-                  {platform === 'codeforces' && excludeSolved && userHandle.status === 'ok' && <><span style={{ color: 'var(--b2)' }}>·</span><span style={{ color: 'var(--success)', fontWeight: 700 }}>−solved</span></>}
-                  {platform === 'codeforces' && showOnlySolved && userHandle.status === 'ok' && <><span style={{ color: 'var(--b2)' }}>·</span><span style={{ color: 'var(--success)', fontWeight: 700 }}>only solved</span></>}
-                  {platform === 'leetcode' && lcExcludeSolved && userHandle.lcStatus === 'ok' && <><span style={{ color: 'var(--b2)' }}>·</span><span style={{ color: 'var(--orange)', fontWeight: 700 }}>−solved</span></>}
-                  {platform === 'leetcode' && lcShowOnlySolved && userHandle.lcStatus === 'ok' && <><span style={{ color: 'var(--b2)' }}>·</span><span style={{ color: 'var(--orange)', fontWeight: 700 }}>only solved</span></>}
-                  {platform === 'codeforces' && smartMode && <><span style={{ color: 'var(--b2)' }}>·</span><span style={{ color: 'var(--primary)', fontWeight: 700 }}>smart</span></>}
-                </div>
+                <ForgeConsole
+                  compact={!showHero}
+                  platform={platform}
+                  minRating={minRating}
+                  maxRating={maxRating}
+                  difficulty={difficulty}
+                  tags={tags}
+                  filterMode={filterMode}
+                  smartMode={smartMode && platform === 'codeforces'}
+                  excludeActive={excludeActive}
+                  onlyActive={onlyActive}
+                  handleLabel={activeHandle}
+                  ready={ready}
+                  hasPlatform={hasPlatform}
+                  hintText={hintText}
+                  loading={loading}
+                  onPick={handlePick}
+                  onDaily={handleDaily}
+                  onPreset={applyPreset}
+                  armory={armory.items}
+                />
 
                 {/* Re-attempt banner — shown when retrying a problem from history */}
                 {reattemptId && (
@@ -643,63 +673,9 @@ export default function App() {
                   </div>
                 )}
 
-                {/* CTA */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-                  <div className="cta-row" style={{ display: 'flex', gap: 9 }}>
-                    <button type="button" onClick={handlePick} disabled={!ready || loading}
-                      style={{
-                        flex: 1, minHeight: 44, padding: '12px 0', borderRadius: 8, cursor: 'pointer', border: 'none',
-                        background: ready ? 'var(--primary)' : 'var(--bg-el)',
-                        color: ready ? '#000' : 'var(--t3)', fontSize: 15, fontWeight: 900, letterSpacing: '-.02em',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                        opacity: (!ready || loading) ? .55 : 1, transition: 'all .15s ease',
-                        boxShadow: ready && !loading ? '0 4px 12px rgba(0, 217, 255, 0.2)' : 'none',
-                        position: 'relative',
-                        overflow: 'hidden',
-                      }}
-                      onMouseEnter={e => { if (ready && !loading) { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 217, 255, 0.25)'; } }}
-                      onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ready && !loading ? '0 4px 12px rgba(0, 217, 255, 0.2)' : 'none'; }}
-                      onMouseDown={e => e.currentTarget.style.transform = 'scale(.97)'}
-                      onMouseUp={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-                    >
-                      {loading
-                        ? <><span style={{ width: 18, height: 18, border: '3px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin .7s linear infinite' }} />Searching…</>
-                        : <><Zap size={18} strokeWidth={2.5} />Get Problem</>
-                      }
-                    </button>
-                    <button type="button" onClick={handleDaily} disabled={!ready || loading}
-                      className="cta-secondary"
-                      style={{
-                        minHeight: 44, padding: '12px 18px', borderRadius: 8, cursor: 'pointer', flexShrink: 0,
-                        background: 'var(--bg-el)',
-                        border: '1px solid var(--b1)',
-                        color: 'var(--t2)', fontSize: 13, fontWeight: 600,
-                        opacity: (!ready || loading) ? .5 : 1, transition: 'all .15s ease',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                        position: 'relative',
-                        overflow: 'hidden',
-                      }}
-                      onMouseEnter={e => { if (ready && !loading) { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--b1)'; e.currentTarget.style.color = 'var(--t2)'; e.currentTarget.style.transform = ''; }}
-                    ><CalendarDays size={16} strokeWidth={1.8} /> Daily</button>
-                  </div>
-
-                  {hintText && !loading && (
-                    <p style={{ fontSize: 12, color: 'var(--primary)', fontFamily: 'var(--mono)', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontWeight: 600 }}>
-                      <AlertCircle size={14} strokeWidth={2} />{hintText}
-                    </p>
-                  )}
-                  {ready && !loading && !problem && (
-                    <p style={{ fontSize: 11, color: 'var(--t3)', fontFamily: 'var(--mono)', textAlign: 'center' }}>
-                      or press{' '}
-                      <kbd style={{ padding: '2px 7px', borderRadius: 5, background: 'var(--bg-press)', border: '1px solid var(--b2)', color: 'var(--t2)', fontSize: 10, fontWeight: 700, marginLeft: '3px' }}>ENTER</kbd>
-                    </p>
-                  )}
-                </div>
-
                 {/* Result */}
                 <div style={{ flex: 1 }}>
-                  {loading && <Skeleton />}
+                  {loading && !showHero && <Skeleton />}
                   {!loading && error && (
                     <ErrorMessage message={error} onRetry={handlePick}
                       noFriendMatch={noFriendMatch}
@@ -711,16 +687,25 @@ export default function App() {
                     />
                   )}
                   {!loading && !error && problem && (
-                    <ProblemCard
-                      key={`${problem.id}-${histKey}`}
-                      problem={problem} meta={meta}
-                      onPickAgain={handlePick}
-                      userSolvedIds={userHandle.status === 'ok' ? userHandle.solvedIds : null}
-                      userHandle={userHandle.status === 'ok' ? userHandle.handle : null}
-                      lcSolvedSlugs={userHandle.lcStatus === 'ok' ? userHandle.lcSolvedSlugs : null}
-                    />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      <ForgeStagePanel
+                        problem={problem}
+                        session={forge}
+                        trophies={armory.items}
+                        handleLabel={rawHandle ? `@${rawHandle}` : null}
+                        onNext={handlePick}
+                      />
+                      <ProblemCard
+                        key={`${problem.id}-${histKey}`}
+                        problem={problem} meta={meta}
+                        onPickAgain={handlePick}
+                        onSolveStart={forge.start}
+                        userSolvedIds={userHandle.status === 'ok' ? userHandle.solvedIds : null}
+                        userHandle={userHandle.status === 'ok' ? userHandle.handle : null}
+                        lcSolvedSlugs={userHandle.lcStatus === 'ok' ? userHandle.lcSolvedSlugs : null}
+                      />
+                    </div>
                   )}
-                  {!loading && !error && !problem && <EmptyState />}
                 </div>
               </div>
             )}

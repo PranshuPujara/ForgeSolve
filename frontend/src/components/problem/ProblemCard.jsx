@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
-import { ExternalLink, Copy, Check, RefreshCw, Clock, Pause, Play, RotateCcw, Users } from 'lucide-react';
+import { ExternalLink, Copy, Check, RefreshCw, Clock, Users } from 'lucide-react';
 import { DifficultyBadge, PlatformBadge, Badge } from '../ui/Badge';
-import { useTimer } from '../../hooks/useTimer';
-import { useLiveSolver } from '../../hooks/useLiveSolver';
 
 const CountUp = ({ target }) => {
   const [v, setV] = useState(0);
@@ -18,9 +16,7 @@ const CountUp = ({ target }) => {
 
 const PLAT_COLOR = { codeforces:'var(--blue)', leetcode:'var(--orange)', gfg:'var(--green)' };
 
-export const ProblemCard = ({ problem, meta, onPickAgain, userSolvedIds, userHandle, lcSolvedSlugs }) => {
-  const { seconds, running, formatted, start, stop, reset } = useTimer();
-  const solver = useLiveSolver();
+export const ProblemCard = ({ problem, meta, onPickAgain, onSolveStart, userSolvedIds, userHandle, lcSolvedSlugs }) => {
   const [opened,  setOpened]  = useState(false);
   const [copied,  setCopied]  = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -31,7 +27,6 @@ export const ProblemCard = ({ problem, meta, onPickAgain, userSolvedIds, userHan
   const accent = PLAT_COLOR[problem.platform] || 'var(--primary)';
   const tags = problem.tags || [];
   const visible = showAll ? tags : tags.slice(0,8);
-  const timerColor = seconds>3600?'var(--red)':seconds>1800?'var(--yellow)':'var(--green)';
 
   // Check if user already solved this: CF checks problem.id, LC checks problem.titleSlug
   const userSolved = isCf
@@ -42,25 +37,15 @@ export const ProblemCard = ({ problem, meta, onPickAgain, userSolvedIds, userHan
 
   const handleOpen = () => {
     window.open(problem.url,'_blank','noopener,noreferrer');
-    if(!opened){ 
-      setOpened(true); 
-      start(); 
-      // Live solver tracking only applies to Codeforces
-      if (isCf && userHandle) {
-        solver.startTracking(problem.id, userHandle);
-      }
+    if(!opened){
+      setOpened(true);
+      onSolveStart?.();
     }
   };
   const handleCopy = async () => {
     try{ await navigator.clipboard.writeText(problem.url); }catch{}
     setCopied(true); setTimeout(()=>setCopied(false),2000);
   };
-
-  useEffect(() => {
-    if (isCf && solver.isSolved && solver.problemId === problem.id && running) {
-      stop();
-    }
-  }, [solver.isSolved, solver.problemId, problem.id, running, stop, isCf]);
 
   return (
     <div className="anim-scale">
@@ -127,33 +112,6 @@ export const ProblemCard = ({ problem, meta, onPickAgain, userSolvedIds, userHan
             </div>
           )}
 
-          {/* Timer */}
-          {opened && (
-            <div className="anim-in" style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
-              padding:'13px 15px', borderRadius:10, background:'var(--bg-el)', border:'1px solid var(--b1)' }}>
-              <div>
-                <div style={{ fontSize:26, fontWeight:900, fontFamily:'var(--mono)', color:timerColor, lineHeight:1, letterSpacing:'-.02em' }}>{formatted}</div>
-                <div style={{ fontSize:11, color:'var(--t3)', marginTop:4, fontFamily:'var(--mono)', fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', display:'flex', alignItems:'center', gap:5 }}>
-                  {running ? <><span style={{ width:6, height:6, borderRadius:'50%', background:timerColor, display:'inline-block' }} /> live</> : <><Pause size={10} strokeWidth={2.5} /> paused</>}
-                </div>
-              </div>
-              <div style={{ display:'flex', gap:8 }}>
-                <button type="button" onClick={running?stop:start}
-                  style={{ padding:'7px 13px', borderRadius:8, cursor:'pointer', background:'var(--bg-hover)', border:'1px solid var(--b1)', color:'var(--t2)', fontSize:12, fontFamily:'var(--mono)', fontWeight:700, transition:'all .15s', display:'flex', alignItems:'center', gap:5 }}
-                  onMouseEnter={e=>{ e.currentTarget.style.borderColor='var(--b2)'; e.currentTarget.style.color='var(--t1)'; }}
-                  onMouseLeave={e=>{ e.currentTarget.style.borderColor='var(--b1)'; e.currentTarget.style.color='var(--t2)'; }}
-                >
-                  {running ? <Pause size={14} strokeWidth={2} /> : <Play size={14} strokeWidth={2} />}
-                </button>
-                <button type="button" onClick={reset} title="Reset"
-                  style={{ padding:'7px 10px', borderRadius:8, cursor:'pointer', background:'transparent', border:'1px solid var(--b0)', color:'var(--t3)', fontSize:13, fontWeight:700, transition:'all .15s' }}
-                  onMouseEnter={e=>{ e.currentTarget.style.color='var(--red)'; e.currentTarget.style.borderColor='var(--red)30'; }}
-                  onMouseLeave={e=>{ e.currentTarget.style.color='var(--t3)'; e.currentTarget.style.borderColor='var(--b0)'; }}
-                ><RotateCcw size={14} strokeWidth={2} /></button>
-              </div>
-            </div>
-          )}
-
           {/* Actions */}
           <div style={{ display:'flex', gap:9 }}>
             <button type="button" onClick={handleOpen}
@@ -185,39 +143,6 @@ export const ProblemCard = ({ problem, meta, onPickAgain, userSolvedIds, userHan
           </div>
         </div>
 
-        {/* Live Solve Success Overlay (Codeforces only) */}
-        {isCf && solver.isSolved && solver.problemId === problem.id && (
-          <div className="anim-scale" style={{
-            position:'absolute', top:0, left:0, right:0, bottom:0,
-            background:'rgba(10, 15, 20, 0.85)', backdropFilter:'blur(6px)',
-            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-            zIndex: 10, padding: 30, textAlign: 'center'
-          }}>
-            <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--success-bg)', border: '2px solid var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, boxShadow: '0 0 20px rgba(0, 255, 128, 0.3)' }}>
-              <Check size={36} strokeWidth={3} color="var(--success)" />
-            </div>
-            <h2 style={{ fontSize: 26, fontWeight: 900, color: 'var(--success)', letterSpacing: '-.03em', fontFamily: 'var(--mono)', textTransform: 'uppercase' }}>Problem Solved!</h2>
-            <p style={{ fontSize: 14, color: 'var(--t2)', marginTop: 8, marginBottom: 24, lineHeight: 1.5 }}>
-              You successfully submitted {problem.id} in <strong style={{ color: '#fff' }}>{formatted}</strong>. Let's keep the streak going.
-            </p>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button type="button" onClick={() => { solver.resetTracker(); setOpened(false); reset(); onPickAgain(); }}
-                style={{ padding:'12px 20px', borderRadius:8, cursor:'pointer', border:'none', background:'var(--primary)', color:'#000', fontSize:14, fontWeight:800, transition:'all .15s ease', boxShadow:'0 4px 12px rgba(0, 217, 255, 0.2)' }}
-                onMouseEnter={e=>{ e.currentTarget.style.transform='translateY(-1px)'; e.currentTarget.style.boxShadow='0 6px 16px rgba(0, 217, 255, 0.3)'; }}
-                onMouseLeave={e=>{ e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow='0 4px 12px rgba(0, 217, 255, 0.2)'; }}
-              >
-                Pick Next Problem
-              </button>
-              <button type="button" onClick={() => solver.resetTracker()}
-                style={{ padding:'12px 18px', borderRadius:8, cursor:'pointer', border:'1px solid var(--b2)', background:'var(--bg-el)', color:'var(--t2)', fontSize:13, fontWeight:700, transition:'all .15s ease' }}
-                onMouseEnter={e=>{ e.currentTarget.style.borderColor='var(--b3)'; e.currentTarget.style.color='var(--t1)'; }}
-                onMouseLeave={e=>{ e.currentTarget.style.borderColor='var(--b2)'; e.currentTarget.style.color='var(--t2)'; }}
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       {meta && (

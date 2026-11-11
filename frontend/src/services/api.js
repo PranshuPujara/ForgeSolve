@@ -37,4 +37,13 @@ export const validateLCUser    = u  => api.get(`/leetcode/user/${u}/solved`, { t
 export const getLCUserStats    = u  => api.get(`/leetcode/user/${u}/stats`, { timeout: SLOW_ROUTE_TIMEOUT });
 export const getLCTags         = () => api.get('/leetcode/tags', { timeout: SLOW_ROUTE_TIMEOUT });
 
+export const checkSolved = async ({ platform, handle, problem, since }) => {
+  const r = await api.get('/solve/check', { params: {
+    platform, handle, since,
+    contestId: problem.contestId, index: problem.index,
+    problemId: problem.id, slug: problem.titleSlug,
+  } });
+  return r?.data ?? r;
+};
+
 export default api;

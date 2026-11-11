@@ -50,13 +50,13 @@ export const HandlePanel = ({
   hook,
   activePlatform = 'codeforces',
   excludeSolved = false,
-  onExcludeChange = () => {},
+  onExcludeChange = () => { },
   showOnlySolved = false,
-  onShowOnlyChange = () => {},
+  onShowOnlyChange = () => { },
   lcExcludeSolved = false,
-  onLcExcludeChange = () => {},
+  onLcExcludeChange = () => { },
   lcShowOnlySolved = false,
-  onLcShowOnlyChange = () => {},
+  onLcShowOnlyChange = () => { },
 }) => {
   const {
     // Codeforces
@@ -258,7 +258,7 @@ export const HandlePanel = ({
                 value={lcInput}
                 onChange={e => setLcInput(e.target.value)}
                 onKeyDown={handleLcKey}
-                placeholder="e.g. neal_wu"
+                placeholder="e.g. pranshu404"
                 disabled={isLcLoading || isLcOk}
                 style={{ paddingRight: isLcOk ? 36 : 12 }}
               />

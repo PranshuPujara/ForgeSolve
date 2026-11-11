@@ -1,0 +1,100 @@
+/* ForgeConsole — Discover home. Uses only existing theme tokens. */
+.fg-card{position:relative;background:var(--bg-card);border:1px solid var(--b1);border-radius:16px;overflow:hidden;
+  box-shadow:0 8px 28px rgba(0,0,0,.28)}
+.fg-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px 0;position:relative;z-index:2}
+.fg-chip{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;padding:4px 10px;border-radius:99px;border:1px solid var(--b2);background:var(--bg-el);color:var(--t2);
+  transition:all .4s ease}
+.fg-chip i{width:6px;height:6px;border-radius:50%;background:var(--c,var(--t3));box-shadow:0 0 8px var(--c,transparent);transition:all .4s}
+.fg-stage{position:relative;height:218px;display:flex;align-items:center;justify-content:center}
+.fg-grid{position:absolute;inset:0;background-image:linear-gradient(var(--b0) 1px,transparent 1px),linear-gradient(90deg,var(--b0) 1px,transparent 1px);
+  background-size:28px 28px;-webkit-mask-image:radial-gradient(ellipse 60% 70% at 50% 55%,#000 15%,transparent 75%);
+  mask-image:radial-gradient(ellipse 60% 70% at 50% 55%,#000 15%,transparent 75%);opacity:.9}
+.fg-glow{position:absolute;left:50%;top:58%;width:340px;height:200px;transform:translate(-50%,-50%);border-radius:50%;
+  background:radial-gradient(closest-side,var(--glow),transparent);transition:background .6s ease,opacity .6s;pointer-events:none}
+.fg-ingot{position:relative;width:250px;height:auto;overflow:visible;transition:filter .6s ease;z-index:1}
+.fg-ingot .top,.fg-ingot .front,.fg-ingot .edge{transition:fill .6s ease,stroke .6s ease}
+.fg-ingot .sheen{animation:fgSheen 3.8s ease-in-out infinite}
+.fg-ingot.striking{animation:fgStrike .5s cubic-bezier(.2,.8,.2,1) infinite}
+.fg-hammer{position:absolute;left:calc(50% + 40px);top:22px;color:var(--t3);transform-origin:90% 90%;transform:rotate(-24deg);
+  transition:color .5s;z-index:2}
+.fg-hammer.hot{color:var(--hot)}
+.fg-hammer.striking{animation:fgHammer .5s ease-in infinite}
+.fg-ember{position:absolute;bottom:62px;width:3px;height:3px;border-radius:50%;background:var(--hot);box-shadow:0 0 6px var(--hot);
+  opacity:0;animation:fgEmber var(--d,3s) ease-out var(--w,0s) infinite;z-index:1}
+.fg-spark{position:absolute;left:50%;top:44%;width:14px;height:2px;border-radius:2px;background:var(--hot);opacity:0;
+  box-shadow:0 0 8px var(--hot);z-index:2}
+.fg-stage.striking .fg-spark{animation:fgSpark .5s ease-out infinite}
+.fg-title{font-size:27px;font-weight:900;letter-spacing:-.04em;line-height:1.1;color:var(--t1);text-align:center}
+.fg-title em{font-style:normal;color:var(--hot);transition:color .5s}
+.fg-sub{font-size:13px;color:var(--t2);text-align:center;line-height:1.55;min-height:20px;margin-top:6px}
+.fg-meter{display:flex;gap:3px;height:8px;align-items:flex-end}
+.fg-meter span{flex:1;height:100%;border-radius:2px;background:var(--bg-press);transition:background .3s,box-shadow .3s}
+.fg-meter span.on{background:var(--hot);box-shadow:0 0 8px color-mix(in srgb,var(--hot) 55%,transparent)}
+.fg-slot{flex:1;min-width:0;padding:10px 12px;border-radius:10px;background:var(--bg-el);border:1px dashed var(--b2);transition:all .3s ease}
+.fg-slot.set{border-style:solid;border-color:color-mix(in srgb,var(--hot) 55%,var(--b1));background:color-mix(in srgb,var(--hot) 8%,var(--bg-el))}
+.fg-slot b{display:block;font-family:var(--mono);font-size:13px;font-weight:700;color:var(--t1);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:capitalize}
+.fg-slot.empty b{color:var(--t3)}
+.fg-mod{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:5px;
+  border:1px solid var(--b2);color:var(--t2);background:var(--bg-el)}
+.fg-cta{position:relative;flex:1;min-height:48px;border-radius:10px;border:none;cursor:pointer;font-size:15px;font-weight:900;letter-spacing:-.02em;
+  display:flex;align-items:center;justify-content:center;gap:9px;transition:transform .15s ease,box-shadow .2s ease,background .3s;overflow:hidden}
+.fg-cta.ready{background:var(--primary);color:#000;box-shadow:0 4px 14px color-mix(in srgb,var(--primary) 28%,transparent)}
+.fg-cta.ready:hover{transform:translateY(-1px);box-shadow:0 8px 22px color-mix(in srgb,var(--primary) 36%,transparent)}
+.fg-cta.ready:not(:disabled)::after{content:'';position:absolute;inset:0;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.35) 50%,transparent 65%);
+  transform:translateX(-120%);animation:fgShine 3.2s ease-in-out infinite}
+.fg-cta:disabled{cursor:not-allowed}
+.fg-cta.idle{background:var(--bg-el);color:var(--t3);border:1px solid var(--b1)}
+.fg-sec{background:var(--bg-el);border:1px solid var(--b1);color:var(--t2);min-height:48px;padding:0 18px;border-radius:10px;font-size:13px;font-weight:600;
+  display:flex;align-items:center;gap:7px;cursor:pointer;transition:all .15s ease}
+.fg-sec:hover:not(:disabled){border-color:var(--primary);color:var(--primary);transform:translateY(-1px)}
+.fg-sec:disabled{opacity:.5;cursor:not-allowed}
+.fg-recipes{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+.fg-recipe{display:flex;align-items:center;gap:12px;text-align:left;padding:12px 13px;border-radius:11px;background:var(--bg-card);
+  border:1px solid var(--b1);cursor:pointer;transition:all .18s cubic-bezier(.16,1,.3,1);justify-content:flex-start;overflow:visible}
+.fg-recipe:hover{border-color:var(--hot);background:var(--bg-el);transform:translateY(-2px)}
+.fg-recipe .ico{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  background:var(--bg-el);border:1px solid var(--b2);color:var(--t2);transition:all .18s}
+.fg-recipe:hover .ico{color:var(--hot);border-color:var(--hot);background:color-mix(in srgb,var(--hot) 10%,var(--bg-el))}
+.fg-recipe strong{display:block;font-size:13px;font-weight:700;color:var(--t1);line-height:1.2}
+.fg-recipe small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--t3);margin-top:3px;letter-spacing:.02em}
+.fg-tip{animation:fgTip .45s ease both}
+.fg-compact{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 15px;border-radius:12px;background:var(--bg-card);border:1px solid var(--b1);
+  font-size:12px;font-family:var(--mono)}
+
+@keyframes fgSheen{0%,100%{transform:translateX(-90px);opacity:0}30%{opacity:.7}60%{transform:translateX(150px);opacity:0}}
+@keyframes fgStrike{0%{transform:translateY(0) scale(1)}35%{transform:translateY(5px) scale(1.035,.94)}100%{transform:translateY(0) scale(1)}}
+@keyframes fgHammer{0%{transform:rotate(-24deg)}60%{transform:rotate(32deg)}100%{transform:rotate(-24deg)}}
+@keyframes fgSpark{0%{opacity:1;transform:rotate(var(--a)) translateX(14px)}100%{opacity:0;transform:rotate(var(--a)) translateX(84px) scaleX(.3)}}
+@keyframes fgEmber{0%{opacity:0;transform:translate(0,0) scale(1)}12%{opacity:.95}100%{opacity:0;transform:translate(var(--x,0),-150px) scale(.3)}}
+@keyframes fgShine{0%,55%{transform:translateX(-120%)}100%{transform:translateX(120%)}}
+@keyframes fgTip{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+
+@media (max-width:480px){
+  .fg-recipes{grid-template-columns:1fr}
+  .fg-stage{height:190px}.fg-ingot{width:210px}.fg-title{font-size:23px}
+  .fg-cta,.fg-sec{min-height:50px}
+}
+@media (prefers-reduced-motion:reduce){
+  .fg-ingot .sheen,.fg-ember,.fg-cta::after,.fg-ingot.striking,.fg-hammer.striking,.fg-stage.striking .fg-spark{animation:none!important}
+}
+
+/* armory + stage panel */
+.fg-rack{display:flex;flex-wrap:wrap;gap:8px;padding:10px;border-radius:12px;background:var(--bg-card);border:1px solid var(--b1);
+  border-bottom:3px solid color-mix(in srgb,var(--orange) 22%,var(--b2))}
+.fg-mini{display:flex;align-items:center;justify-content:center;width:74px;height:38px;border-radius:8px;background:var(--bg-el);border:1px solid var(--b1);
+  transition:all .15s ease;text-decoration:none}
+.fg-mini:hover{border-color:var(--g);transform:translateY(-2px);box-shadow:0 6px 14px color-mix(in srgb,var(--g) 22%,transparent)}
+.fg-stages{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.fg-stage-chip{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:4px 9px;border-radius:6px;
+  border:1px solid var(--b2);color:var(--t3);background:var(--bg-el);transition:all .3s ease}
+.fg-stage-chip.on{color:var(--orange);border-color:var(--orange);background:var(--orange-bg)}
+.fg-stage-chip.done{color:var(--green);border-color:color-mix(in srgb,var(--green) 40%,var(--b2))}
+.fg-reveal{display:flex;gap:14px;align-items:center;padding:12px 14px;border-radius:12px;background:var(--bg-card);border:1px solid var(--g);
+  box-shadow:0 8px 26px color-mix(in srgb,var(--g) 14%,transparent);animation:fgSeal .5s cubic-bezier(.16,1,.3,1) both}
+.fg-reveal>div:nth-child(2){flex:1}
+.fg-seal{min-width:62px;height:54px;padding:0 8px;flex-shrink:0;border-radius:8px;border:2px solid var(--red);color:var(--red);display:flex;align-items:center;justify-content:center;
+  text-align:center;font-weight:900;font-size:11px;line-height:1.05;letter-spacing:.04em;text-transform:uppercase;transform:rotate(-6deg);background:var(--red-bg)}
+@keyframes fgSeal{from{opacity:0;transform:translateY(14px) scale(.9)}to{opacity:1;transform:none}}
+@media (max-width:480px){.fg-reveal{flex-wrap:wrap}}
+.fg-card .fs-scene.fs-hero{border:none;border-radius:0;border-bottom:1px solid var(--b1)}
