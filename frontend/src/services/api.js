@@ -8,6 +8,11 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+// LeetCode (and problem picking) can trigger a cold upstream fetch that takes
+// 10-30s on Render's free tier. Keep the default short timeout for Codeforces,
+// but allow these routes to finish instead of surfacing a false "no response".
+const SLOW_ROUTE_TIMEOUT = 60000;
+
 api.interceptors.response.use(
   res => res.data,
   err => {
@@ -19,17 +24,17 @@ api.interceptors.response.use(
   }
 );
 
-export const pickProblem       = p  => api.post('/problems/pick',  p);
-export const getDailyProblem   = p  => api.post('/problems/daily', p);
-export const reattemptProblem  = p  => api.post('/problems/reattempt', p);
-export const getTags           = pl => api.get(`/problems/tags?platform=${pl}`);
+export const pickProblem       = p  => api.post('/problems/pick',  p, { timeout: SLOW_ROUTE_TIMEOUT });
+export const getDailyProblem   = p  => api.post('/problems/daily', p, { timeout: SLOW_ROUTE_TIMEOUT });
+export const reattemptProblem  = p  => api.post('/problems/reattempt', p, { timeout: SLOW_ROUTE_TIMEOUT });
+export const getTags           = pl => api.get(`/problems/tags?platform=${pl}`, { timeout: SLOW_ROUTE_TIMEOUT });
 export const getFriendsSolved  = h  => api.post('/codeforces/friends/solved', { handles: h });
 export const validateHandle    = h  => api.get(`/codeforces/user/${h}/solved`);
 export const getUserStats      = h  => api.get(`/codeforces/user/${h}/stats`);
 
 // LeetCode API methods
-export const validateLCUser    = u  => api.get(`/leetcode/user/${u}/solved`);
-export const getLCUserStats    = u  => api.get(`/leetcode/user/${u}/stats`);
-export const getLCTags         = () => api.get('/leetcode/tags');
+export const validateLCUser    = u  => api.get(`/leetcode/user/${u}/solved`, { timeout: SLOW_ROUTE_TIMEOUT });
+export const getLCUserStats    = u  => api.get(`/leetcode/user/${u}/stats`, { timeout: SLOW_ROUTE_TIMEOUT });
+export const getLCTags         = () => api.get('/leetcode/tags', { timeout: SLOW_ROUTE_TIMEOUT });
 
 export default api;

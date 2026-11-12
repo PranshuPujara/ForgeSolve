@@ -18,6 +18,11 @@ const STATIC_FALLBACK_TTL = 30; // seconds - short TTL on error so subsequent re
 const MIN_COMPLETE_DATASET_SIZE = 500; // safety threshold to ensure complete problemset
 
 let inFlightFetchPromise = null;
+// SingleFlight maps for per-user requests — prevents duplicate upstream calls when
+// React strict-mode double-mounts, retries, or multiple tabs request the same user.
+// (Solved and stats are kept separate because they hit different upstream endpoints.)
+const inFlightUserSolved = new Map(); // username → Promise<Set>
+const inFlightUserStats = new Map(); // username → Promise<stats>
 
 // Official 73 LeetCode tags, ordered descending by official question count
 // (nonexistent tags, typo duplicates like 'heap (1)', and non-LeetCode categories are removed)
@@ -110,9 +115,21 @@ const TAG_ALIASES = {
   'doubly linked list': 'doubly-linked list',
 };
 
-const getBaseUrl = () => process.env.LEETCODE_API_BASE_URL || 'http://localhost:3001';
+// Upstream alfa-leetcode-api base URL.
+// Production MUST point at the deployed alfa instance, never localhost. If the env
+// var is unset we fall back to the primary Render deployment instead of localhost,
+// which is the default that caused every production LeetCode call to fail.
+const DEFAULT_LEETCODE_API_BASE_URL = process.env.NODE_ENV === 'production'
+  ? 'https://alfa-leetcode-api-yrq5.onrender.com'
+  : 'http://localhost:3001';
+
+const getBaseUrl = () =>
+  (process.env.LEETCODE_API_BASE_URL || DEFAULT_LEETCODE_API_BASE_URL).replace(/\/+$/, '');
 const getCacheTtl = () => parseInt(process.env.LEETCODE_CACHE_TTL_SECONDS, 10) || 3600;
 const getUserCacheTtl = () => parseInt(process.env.LEETCODE_USER_CACHE_TTL_SECONDS, 10) || 600;
+// Render's free tier spins the upstream down when idle; a cold start can take 15-50s.
+// 10s was too aggressive and turned every first request after idle into a 503.
+const UPSTREAM_USER_TIMEOUT = parseInt(process.env.LEETCODE_USER_TIMEOUT_MS, 10) || 30000;
 
 function createHttpError(message, status) {
   const err = new Error(message);
@@ -435,29 +452,42 @@ const getUserSolvedSlugs = async (username) => {
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  try {
-    // Upstream alfa-leetcode-api endpoint for recent ACs (limit up to 100)
-    const res = await axios.get(`${getBaseUrl()}/${encodeURIComponent(username)}/acSubmission`, {
-      params: { limit: 100 },
-      timeout: 10000,
-    });
-
-    if (res.data?.errors || res.data?.error) {
-      throw createHttpError(`LeetCode user "${username}" not found`, 404);
-    }
-
-    const submissions = res.data?.submission || [];
-    const solvedSet = new Set(submissions.map(s => s.titleSlug).filter(Boolean));
-
-    cache.set(cacheKey, solvedSet, getUserCacheTtl());
-    return solvedSet;
-  } catch (err) {
-    if (err.status) throw err;
-    if (err.response?.status === 404 || err.response?.data?.errors) {
-      throw createHttpError(`LeetCode user "${username}" not found`, 404);
-    }
-    throw createHttpError(`LeetCode upstream service unavailable: ${err.message}`, 503);
+  // SingleFlight: deduplicate concurrent requests for the same user.
+  if (inFlightUserSolved.has(username)) {
+    return inFlightUserSolved.get(username);
   }
+
+  const promise = (async () => {
+    try {
+      const res = await axios.get(`${getBaseUrl()}/${encodeURIComponent(username)}/acSubmission`, {
+        params: { limit: 100 },
+        timeout: UPSTREAM_USER_TIMEOUT,
+      });
+
+      if (res.data?.errors || res.data?.error) {
+        throw createHttpError(`LeetCode user "${username}" not found`, 404);
+      }
+
+      const submissions = res.data?.submission || [];
+      const solvedSet = new Set(submissions.map(s => s.titleSlug).filter(Boolean));
+
+      cache.set(cacheKey, solvedSet, getUserCacheTtl());
+      console.log(`[LC] Cached solved slugs for "${username}": ${solvedSet.size} problems`);
+      return solvedSet;
+    } catch (err) {
+      if (err.status) throw err;
+      if (err.response?.status === 404 || err.response?.data?.errors) {
+        throw createHttpError(`LeetCode user "${username}" not found`, 404);
+      }
+      console.warn(`[LC] getUserSolvedSlugs failed for "${username}": ${err.message}`);
+      throw createHttpError(`LeetCode upstream service unavailable: ${err.message}`, 503);
+    } finally {
+      inFlightUserSolved.delete(username);
+    }
+  })();
+
+  inFlightUserSolved.set(username, promise);
+  return promise;
 };
 
 /**
@@ -476,112 +506,127 @@ const getUserStats = async (username) => {
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const url = getBaseUrl();
-  const [profileRes, solvedRes, calRes, acRes, problems] = await Promise.all([
-    axios.get(`${url}/${encodeURIComponent(username)}`, { timeout: 10000 }).catch(e => e),
-    axios.get(`${url}/${encodeURIComponent(username)}/solved`, { timeout: 10000 }).catch(e => e),
-    axios.get(`${url}/${encodeURIComponent(username)}/calendar`, { timeout: 10000 }).catch(e => e),
-    axios.get(`${url}/${encodeURIComponent(username)}/acSubmission?limit=100`, { timeout: 10000 }).catch(e => e),
-    getAllProblems(),
-  ]);
-
-  if (profileRes instanceof Error) {
-    if (profileRes.response?.status === 404 || profileRes.response?.data?.errors) {
-      throw createHttpError(`LeetCode user "${username}" not found`, 404);
-    }
-    throw createHttpError(`LeetCode upstream service unavailable: ${profileRes.message}`, 503);
+  // SingleFlight: deduplicate concurrent requests for same user stats.
+  if (inFlightUserStats.has(username)) {
+    return inFlightUserStats.get(username);
   }
 
-  const profileData = profileRes.data || {};
-  if (profileData.errors || profileData.error) {
-    throw createHttpError(`LeetCode user "${username}" not found`, 404);
-  }
-
-  const solvedData = !(solvedRes instanceof Error) ? (solvedRes.data || {}) : {};
-  const calData = !(calRes instanceof Error) ? (calRes.data || {}) : {};
-  const acData = !(acRes instanceof Error) ? (acRes.data || {}) : {};
-
-  // Build problem map to compute topTags from recent ACs
-  const problemMap = new Map();
-  problems.forEach(p => { if (p.titleSlug) problemMap.set(p.titleSlug, p); });
-
-  const tagCount = {};
-  const recentSubmissions = acData.submission || [];
-  recentSubmissions.forEach(s => {
-    if (s.titleSlug && problemMap.has(s.titleSlug)) {
-      const p = problemMap.get(s.titleSlug);
-      (p.tags || []).forEach(t => {
-        tagCount[t] = (tagCount[t] || 0) + 1;
-      });
-    }
-  });
-
-  const topTags = Object.entries(tagCount)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([tag, count]) => ({ tag, count }));
-
-  // Parse calendar for monthly activity and streaks
-  const monthlyCounts = {};
-  if (calData.submissionCalendar) {
+  const promise = (async () => {
     try {
-      const parsed = typeof calData.submissionCalendar === 'string'
-        ? JSON.parse(calData.submissionCalendar)
-        : calData.submissionCalendar;
-      Object.entries(parsed).forEach(([epochSec, count]) => {
-        const d = new Date(parseInt(epochSec, 10) * 1000);
-        const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        monthlyCounts[ym] = (monthlyCounts[ym] || 0) + (count || 0);
+      const url = getBaseUrl();
+      const [profileRes, solvedRes, calRes, acRes, problems] = await Promise.all([
+        axios.get(`${url}/${encodeURIComponent(username)}`, { timeout: UPSTREAM_USER_TIMEOUT }).catch(e => e),
+        axios.get(`${url}/${encodeURIComponent(username)}/solved`, { timeout: UPSTREAM_USER_TIMEOUT }).catch(e => e),
+        axios.get(`${url}/${encodeURIComponent(username)}/calendar`, { timeout: UPSTREAM_USER_TIMEOUT }).catch(e => e),
+        axios.get(`${url}/${encodeURIComponent(username)}/acSubmission?limit=100`, { timeout: UPSTREAM_USER_TIMEOUT }).catch(e => e),
+        getAllProblems(),
+      ]);
+
+      if (profileRes instanceof Error) {
+        if (profileRes.response?.status === 404 || profileRes.response?.data?.errors) {
+          throw createHttpError(`LeetCode user "${username}" not found`, 404);
+        }
+        throw createHttpError(`LeetCode upstream service unavailable: ${profileRes.message}`, 503);
+      }
+
+      const profileData = profileRes.data || {};
+      if (profileData.errors || profileData.error) {
+        throw createHttpError(`LeetCode user "${username}" not found`, 404);
+      }
+
+      const solvedData = !(solvedRes instanceof Error) ? (solvedRes.data || {}) : {};
+      const calData = !(calRes instanceof Error) ? (calRes.data || {}) : {};
+      const acData = !(acRes instanceof Error) ? (acRes.data || {}) : {};
+
+      // Build problem map to compute topTags from recent ACs
+      const problemMap = new Map();
+      problems.forEach(p => { if (p.titleSlug) problemMap.set(p.titleSlug, p); });
+
+      const tagCount = {};
+      const recentSubmissions = acData.submission || [];
+      recentSubmissions.forEach(s => {
+        if (s.titleSlug && problemMap.has(s.titleSlug)) {
+          const p = problemMap.get(s.titleSlug);
+          (p.tags || []).forEach(t => {
+            tagCount[t] = (tagCount[t] || 0) + 1;
+          });
+        }
       });
-    } catch {
-      // ignore parse errors
+
+      const topTags = Object.entries(tagCount)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([tag, count]) => ({ tag, count }));
+
+      // Parse calendar for monthly activity and streaks
+      const monthlyCounts = {};
+      if (calData.submissionCalendar) {
+        try {
+          const parsed = typeof calData.submissionCalendar === 'string'
+            ? JSON.parse(calData.submissionCalendar)
+            : calData.submissionCalendar;
+          Object.entries(parsed).forEach(([epochSec, count]) => {
+            const d = new Date(parseInt(epochSec, 10) * 1000);
+            const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            monthlyCounts[ym] = (monthlyCounts[ym] || 0) + (count || 0);
+          });
+        } catch {
+          // ignore parse errors
+        }
+      }
+
+      const now = new Date();
+      const monthlyActivity = [];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        monthlyActivity.push({ month: k, count: monthlyCounts[k] || 0 });
+      }
+
+      const ranking = profileData.ranking ? parseInt(profileData.ranking, 10) : null;
+      const solvedCount = solvedData.solvedProblem || profileData.solvedProblem || 0;
+      const easySolved = solvedData.easySolved || 0;
+      const mediumSolved = solvedData.mediumSolved || 0;
+      const hardSolved = solvedData.hardSolved || 0;
+      const totalSubmissions = profileData.totalSubmissions || (solvedCount > 0 ? solvedCount : 0);
+      const acRate = profileData.acRate !== undefined
+        ? Math.round(profileData.acRate)
+        : (totalSubmissions > 0 ? Math.round((solvedCount / totalSubmissions) * 100) : 0);
+
+      const currentStreak = calData.streak || 0;
+      const maxStreak = calData.totalActiveDays || currentStreak || 0;
+
+      const stats = {
+        platform: 'leetcode',
+        handle: username,
+        rating: ranking || null,
+        rank: ranking ? `Rank #${ranking}` : 'Unranked',
+        avatar: profileData.avatar || null,
+        country: profileData.country || null,
+        solvedCount,
+        easySolved,
+        mediumSolved,
+        hardSolved,
+        attemptedCount: 0,
+        totalSubmissions,
+        acRate,
+        currentStreak,
+        maxStreak,
+        topTags,
+        monthlyActivity,
+        ratingDist: [],
+      };
+
+      cache.set(cacheKey, stats, getUserCacheTtl());
+      console.log(`[LC] Cached stats for "${username}"`);
+      return stats;
+    } finally {
+      inFlightUserStats.delete(username);
     }
-  }
+  })();
 
-  const now = new Date();
-  const monthlyActivity = [];
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    monthlyActivity.push({ month: k, count: monthlyCounts[k] || 0 });
-  }
-
-  const ranking = profileData.ranking ? parseInt(profileData.ranking, 10) : null;
-  const solvedCount = solvedData.solvedProblem || profileData.solvedProblem || 0;
-  const easySolved = solvedData.easySolved || 0;
-  const mediumSolved = solvedData.mediumSolved || 0;
-  const hardSolved = solvedData.hardSolved || 0;
-  const totalSubmissions = profileData.totalSubmissions || (solvedCount > 0 ? solvedCount : 0);
-  const acRate = profileData.acRate !== undefined
-    ? Math.round(profileData.acRate)
-    : (totalSubmissions > 0 ? Math.round((solvedCount / totalSubmissions) * 100) : 0);
-
-  const currentStreak = calData.streak || 0;
-  const maxStreak = calData.totalActiveDays || currentStreak || 0;
-
-  const stats = {
-    platform: 'leetcode',
-    handle: username,
-    rating: ranking || null,
-    rank: ranking ? `Rank #${ranking}` : 'Unranked',
-    avatar: profileData.avatar || null,
-    country: profileData.country || null,
-    solvedCount,
-    easySolved,
-    mediumSolved,
-    hardSolved,
-    attemptedCount: 0,
-    totalSubmissions,
-    acRate,
-    currentStreak,
-    maxStreak,
-    topTags,
-    monthlyActivity,
-    ratingDist: [],
-  };
-
-  cache.set(cacheKey, stats, getUserCacheTtl());
-  return stats;
+  inFlightUserStats.set(username, promise);
+  return promise;
 };
 
 module.exports = {
@@ -590,6 +635,7 @@ module.exports = {
   getAllTags,
   getUserSolvedSlugs,
   getUserStats,
+  getBaseUrl,
   STATIC_PROBLEMS,
   OFFICIAL_LEETCODE_TAGS,
 };

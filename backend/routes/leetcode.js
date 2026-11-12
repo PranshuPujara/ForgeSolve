@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const rateLimit = require('express-rate-limit');
 const {
   getAllProblems,
   refreshProblems,
@@ -9,12 +8,10 @@ const {
   getUserStats,
 } = require('../services/leetcodeService');
 
-// Modest rate limit (30 requests/min per IP) on /user/* endpoints
-const userRateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
-  message: { error: 'Too many user requests. Please slow down.' },
-});
+// NOTE: No separate rate-limiter here — the global limiter in server.js (120 req/min)
+// already covers all /api/* routes per real client IP.  Adding a second limiter was
+// causing double-counting, and when trust-proxy wasn't resolving correctly every user
+// on Render shared one IP bucket and hit the 30-req cap almost instantly.
 
 // GET /api/leetcode/tags
 router.get('/tags', async (req, res, next) => {
@@ -27,7 +24,7 @@ router.get('/tags', async (req, res, next) => {
 });
 
 // GET /api/leetcode/user/:username/solved
-router.get('/user/:username/solved', userRateLimiter, async (req, res, next) => {
+router.get('/user/:username/solved', async (req, res, next) => {
   try {
     const { username } = req.params;
     const solvedSet = await getUserSolvedSlugs(username);
@@ -43,7 +40,7 @@ router.get('/user/:username/solved', userRateLimiter, async (req, res, next) => 
 });
 
 // GET /api/leetcode/user/:username/stats
-router.get('/user/:username/stats', userRateLimiter, async (req, res, next) => {
+router.get('/user/:username/stats', async (req, res, next) => {
   try {
     const { username } = req.params;
     const stats = await getUserStats(username);
