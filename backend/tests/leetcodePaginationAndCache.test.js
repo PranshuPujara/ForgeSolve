@@ -130,12 +130,13 @@ test('Scenario 7: Cache preserves valid complete dataset on failed live fetch', 
   cache.del('leetcode_problemset');
 });
 
-test('Scenario 8: Empty cache falls back gracefully to static dataset with short TTL', async () => {
+test('Scenario 8: Empty cache falls back gracefully to a complete snapshot with short TTL', async () => {
   cache.del('leetcode_problemset');
 
-  // In test environment without network, live fetch fails
+  // In test environment without network, live fetch fails and the bundled snapshot is used.
   const result = await getAllProblems();
-  assert.strictEqual(result.length, STATIC_PROBLEMS.length);
+  assert.ok(result.length >= STATIC_PROBLEMS.length, 'Fallback must never be smaller than the curated list');
+  assert.ok(result.length >= 500, 'Fallback should be the complete bundled snapshot when available');
   assert.strictEqual(result[0].id, 'lc-1');
   cache.del('leetcode_problemset');
 });

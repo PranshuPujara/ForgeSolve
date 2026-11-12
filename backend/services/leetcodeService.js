@@ -1,6 +1,7 @@
 /**
  * LeetCode service.
- * Supports self-hosted alfa-leetcode-api upstream with fallback to a curated static dataset.
+ * Supports self-hosted alfa-leetcode-api upstream, with a direct LeetCode GraphQL
+ * fallback and a bundled full-dataset snapshot for maximum resilience.
  *
  * Upstream note:
  * LeetCode upstream GraphQL recentAcSubmissionList caps limit at 100;
@@ -8,14 +9,26 @@
  */
 
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 const cache = require('../utils/cache');
+const leetcodeGraphql = require('./leetcodeGraphql');
 
 const PROBLEMS_CACHE_KEY = 'leetcode_problemset';
 const USER_CACHE_PREFIX = 'lc:user:';
 const STATS_CACHE_PREFIX = 'lc:stats:';
 
-const STATIC_FALLBACK_TTL = 30; // seconds - short TTL on error so subsequent requests can retry live
+// How long to serve the offline snapshot before retrying live sources. Longer than
+// the old 30s because requests should not block on a dead upstream every half minute.
+const STATIC_FALLBACK_TTL = parseInt(process.env.LEETCODE_FALLBACK_TTL_SECONDS, 10) || 300;
 const MIN_COMPLETE_DATASET_SIZE = 500; // safety threshold to ensure complete problemset
+
+// Bundled snapshot of the full problemset (committed to the repo). Used whenever
+// every live source is unreachable so discovery never degrades to a tiny list.
+const BUNDLED_DATASET_PATH = path.join(__dirname, '..', 'data', 'leetcode-problems.json');
+// Last successfully fetched dataset, persisted so a Render restart doesn't have to
+// wait on (or fail because of) a cold upstream.
+const LAST_GOOD_DATASET_PATH = path.join(__dirname, '..', 'data', 'leetcode-problems.last-good.json');
 
 let inFlightFetchPromise = null;
 // SingleFlight maps for per-user requests — prevents duplicate upstream calls when
@@ -116,12 +129,13 @@ const TAG_ALIASES = {
 };
 
 // Upstream alfa-leetcode-api base URL.
-// Production MUST point at the deployed alfa instance, never localhost. If the env
-// var is unset we fall back to the primary Render deployment instead of localhost,
-// which is the default that caused every production LeetCode call to fail.
-const DEFAULT_LEETCODE_API_BASE_URL = process.env.NODE_ENV === 'production'
-  ? 'https://alfa-leetcode-api-yrq5.onrender.com'
-  : 'http://localhost:3001';
+// Only local dev/test should hit localhost. A deployed instance with NODE_ENV
+// unset must still reach the hosted alfa instance instead of trying localhost,
+// which was the default that caused every production LeetCode call to fail.
+const IS_LOCAL_ENV = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
+const DEFAULT_LEETCODE_API_BASE_URL = IS_LOCAL_ENV
+  ? 'http://localhost:3001'
+  : 'https://alfa-leetcode-api-yrq5.onrender.com';
 
 const getBaseUrl = () =>
   (process.env.LEETCODE_API_BASE_URL || DEFAULT_LEETCODE_API_BASE_URL).replace(/\/+$/, '');
@@ -198,17 +212,19 @@ const STATIC_PROBLEMS = [
 /**
  * Retry helper for page requests.
  */
-async function fetchPageWithRetry(baseUrl, skip, limit, retries = 2) {
+async function fetchPageWithRetry(baseUrl, skip, limit, retries = 2, signal) {
   const maxRetries = process.env.NODE_ENV === 'test' ? 0 : retries;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const res = await axios.get(`${baseUrl}/problems`, {
         params: { limit, skip },
         timeout: process.env.NODE_ENV === 'test' ? 2000 : 25000,
+        signal,
       });
       return res.data || {};
     } catch (err) {
-      if (attempt >= maxRetries) {
+      const aborted = err.name === 'CanceledError' || err.code === 'ERR_CANCELED';
+      if (aborted || attempt >= maxRetries) {
         throw new Error(`Failed to fetch page (skip=${skip}, limit=${limit}): ${err.message}`);
       }
       await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
@@ -250,10 +266,77 @@ function normalizeQuestion(q) {
 }
 
 /**
- * Fetch all problems from upstream alfa-leetcode-api, paginating up to 60 pages (page size 100).
- * Handles pagination using `limit` and `skip`, concurrent batches of 4, and per-page retries.
+ * Deduplicate + deterministically sort normalized problems by questionId.
  */
-async function fetchFromLiveApi() {
+function dedupeAndSort(problems) {
+  const seenIds = new Set();
+  const unique = [];
+  for (const p of problems) {
+    if (!p || seenIds.has(p.id)) continue;
+    seenIds.add(p.id);
+    unique.push(p);
+  }
+  unique.sort((a, b) => {
+    const numA = parseInt(a.questionId, 10);
+    const numB = parseInt(b.questionId, 10);
+    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+    return a.questionId.localeCompare(b.questionId);
+  });
+  return unique;
+}
+
+/**
+ * Normalize a raw upstream question list into the canonical dataset.
+ */
+function normalizeAll(rawQuestions) {
+  const normalized = [];
+  for (const q of rawQuestions) {
+    const n = normalizeQuestion(q);
+    if (n) normalized.push(n);
+  }
+  return dedupeAndSort(normalized);
+}
+
+function readDatasetFile(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    if (!Array.isArray(parsed) || parsed.length < MIN_COMPLETE_DATASET_SIZE) return null;
+    return parsed;
+  } catch (err) {
+    console.warn(`[LC] Failed to read dataset ${path.basename(filePath)}: ${err.message}`);
+    return null;
+  }
+}
+
+/**
+ * Full-dataset fallback used when every live source fails: try the last good
+ * runtime snapshot first, then the bundled snapshot, then the curated static list.
+ */
+function getFallbackDataset() {
+  const lastGood = readDatasetFile(LAST_GOOD_DATASET_PATH);
+  if (lastGood) return lastGood;
+  const bundled = readDatasetFile(BUNDLED_DATASET_PATH);
+  if (bundled) return bundled;
+  return STATIC_PROBLEMS;
+}
+
+/**
+ * Persist a successful fetch to disk for fast recovery after a restart.
+ */
+function persistLastGood(problems) {
+  try {
+    fs.mkdirSync(path.dirname(LAST_GOOD_DATASET_PATH), { recursive: true });
+    fs.writeFileSync(LAST_GOOD_DATASET_PATH, JSON.stringify(problems));
+  } catch (err) {
+    console.warn(`[LC] Failed to persist last-good dataset: ${err.message}`);
+  }
+}
+
+/**
+ * Fetch the raw problemset from alfa-leetcode-api (primary upstream).
+ */
+async function fetchFromAlfaApi(signal) {
   const baseUrl = getBaseUrl();
   const limit = 100;
   const maxPages = 60; // Safely covers up to 6,000 problems
@@ -262,7 +345,7 @@ async function fetchFromLiveApi() {
   console.log(`[LC] Starting problemset fetch from ${baseUrl}/problems (limit=${limit})`);
 
   // Step 1: Fetch initial page to discover total available questions
-  const page0Data = await fetchPageWithRetry(baseUrl, 0, limit);
+  const page0Data = await fetchPageWithRetry(baseUrl, 0, limit, 2, signal);
   const totalQuestions = parseInt(page0Data.totalQuestions, 10) || 0;
   const initialQuestions = page0Data.problemsetQuestionList || [];
 
@@ -286,7 +369,7 @@ async function fetchFromLiveApi() {
       const batch = skips.slice(i, i + concurrency);
       batchesCount += batch.length;
       const results = await Promise.all(
-        batch.map(skip => fetchPageWithRetry(baseUrl, skip, limit))
+        batch.map(skip => fetchPageWithRetry(baseUrl, skip, limit, 2, signal))
       );
       for (const res of results) {
         const qList = res.problemsetQuestionList || [];
@@ -300,7 +383,7 @@ async function fetchFromLiveApi() {
     let page = 1;
     while (page < maxPages) {
       batchesCount++;
-      const res = await fetchPageWithRetry(baseUrl, page * limit, limit);
+      const res = await fetchPageWithRetry(baseUrl, page * limit, limit, 2, signal);
       const qList = res.problemsetQuestionList || [];
       if (!qList.length) break;
       allRawQuestions.push(...qList);
@@ -309,32 +392,73 @@ async function fetchFromLiveApi() {
     }
   }
 
-  // Step 3: Normalize and deduplicate by canonical id
-  const seenIds = new Set();
-  const problems = [];
-  for (const q of allRawQuestions) {
-    const normalized = normalizeQuestion(q);
-    if (!normalized) continue;
-    if (seenIds.has(normalized.id)) continue;
-    seenIds.add(normalized.id);
-    problems.push(normalized);
-  }
-
-  // Step 4: Deterministic sort by questionId
-  problems.sort((a, b) => {
-    const numA = parseInt(a.questionId, 10);
-    const numB = parseInt(b.questionId, 10);
-    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-    return a.questionId.localeCompare(b.questionId);
-  });
-
   const durationMs = Date.now() - t0;
   console.log(
-    `[LC] Live fetch complete: ${allRawQuestions.length} raw questions in ${batchesCount} batches, ` +
-    `${problems.length} unique free problems in ${durationMs}ms`
+    `[LC] alfa-leetcode-api fetch complete: ${allRawQuestions.length} raw questions in ` +
+    `${batchesCount} batches in ${durationMs}ms`
   );
 
-  return problems;
+  return allRawQuestions;
+}
+
+/**
+ * Fetch the complete problemset from the live sources, trying the primary
+ * alfa-leetcode-api upstream first and falling back to LeetCode GraphQL.
+ */
+async function fetchFromLiveApi() {
+  const t0 = Date.now();
+  // Bound each source so a cold/spinning-down upstream can't stall discovery.
+  // If alfa takes longer than this, we abort it and try LeetCode GraphQL instead.
+  const alfaTimeout = parseInt(process.env.LEETCODE_SOURCE_TIMEOUT_MS, 10) || 20000;
+  const graphqlTimeout = parseInt(process.env.LEETCODE_GRAPHQL_SOURCE_TIMEOUT_MS, 10) || 35000;
+  const sources = [
+    {
+      name: 'alfa-leetcode-api',
+      timeout: alfaTimeout,
+      fetch: (signal) => fetchFromAlfaApi(signal),
+    },
+    {
+      name: 'leetcode-graphql',
+      timeout: graphqlTimeout,
+      fetch: (signal) => leetcodeGraphql.fetchAllProblems({ concurrency: 4, signal }),
+    },
+  ];
+
+  const failures = [];
+  for (const source of sources) {
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, source.timeout);
+
+    try {
+      console.log(`[LC] Trying live source: ${source.name} (timeout=${source.timeout}ms)`);
+      const rawQuestions = await source.fetch(controller.signal);
+      const problems = normalizeAll(rawQuestions);
+      if (problems.length >= MIN_COMPLETE_DATASET_SIZE) {
+        console.log(
+          `[LC] ${source.name} succeeded: ${problems.length} unique free problems in ${Date.now() - t0}ms`
+        );
+        return problems;
+      }
+      failures.push(`${source.name}: incomplete dataset (${problems.length})`);
+      console.warn(`[LC] ${source.name} returned incomplete dataset (${problems.length})`);
+    } catch (err) {
+      if (timedOut) {
+        failures.push(`${source.name}: timed out after ${source.timeout}ms`);
+        console.warn(`[LC] ${source.name} timed out after ${source.timeout}ms`);
+      } else {
+        failures.push(`${source.name}: ${err.message}`);
+        console.warn(`[LC] ${source.name} failed: ${err.message}`);
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  throw new Error(`All live LeetCode sources failed → ${failures.join(' | ')}`);
 }
 
 /**
@@ -348,9 +472,10 @@ const getAllProblems = async () => {
   }
 
   if (process.env.LEETCODE_USE_STATIC === 'true') {
-    console.log(`[LC] LEETCODE_USE_STATIC is set to true; using static dataset (${STATIC_PROBLEMS.length} problems)`);
-    cache.set(PROBLEMS_CACHE_KEY, STATIC_PROBLEMS, getCacheTtl());
-    return STATIC_PROBLEMS;
+    const staticDataset = getFallbackDataset();
+    console.log(`[LC] LEETCODE_USE_STATIC is set to true; using static dataset (${staticDataset.length} problems)`);
+    cache.set(PROBLEMS_CACHE_KEY, staticDataset, getCacheTtl());
+    return staticDataset;
   }
 
   // SingleFlight: deduplicate concurrent in-flight fetches
@@ -368,6 +493,7 @@ const getAllProblems = async () => {
       }
 
       cache.set(PROBLEMS_CACHE_KEY, problems, getCacheTtl());
+      persistLastGood(problems);
       console.log(`[LC] Cached ${problems.length} free problems for ${getCacheTtl()}s`);
       return problems;
     } catch (err) {
@@ -380,10 +506,15 @@ const getAllProblems = async () => {
         return existing;
       }
 
-      // No previous valid cache exists: use static fallback with short TTL so retries happen soon
-      console.log(`[LC] Falling back to static dataset (${STATIC_PROBLEMS.length} problems, TTL=${STATIC_FALLBACK_TTL}s)`);
-      cache.set(PROBLEMS_CACHE_KEY, STATIC_PROBLEMS, STATIC_FALLBACK_TTL);
-      return STATIC_PROBLEMS;
+      // No previous valid cache exists: use the last-good/bundled full snapshot.
+      // Only fall back to the tiny curated list if no snapshot is available.
+      const fallback = getFallbackDataset();
+      console.log(
+        `[LC] Falling back to ${fallback === STATIC_PROBLEMS ? 'curated static' : 'snapshot'} dataset ` +
+        `(${fallback.length} problems, TTL=${STATIC_FALLBACK_TTL}s)`
+      );
+      cache.set(PROBLEMS_CACHE_KEY, fallback, STATIC_FALLBACK_TTL);
+      return fallback;
     } finally {
       inFlightFetchPromise = null;
     }
@@ -636,6 +767,11 @@ module.exports = {
   getUserSolvedSlugs,
   getUserStats,
   getBaseUrl,
+  fetchFromLiveApi,
+  normalizeQuestion,
+  normalizeAll,
+  dedupeAndSort,
   STATIC_PROBLEMS,
   OFFICIAL_LEETCODE_TAGS,
+  BUNDLED_DATASET_PATH,
 };

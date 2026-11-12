@@ -37,3 +37,6 @@ Thumbs.db
 
 # Misc
 *.tsbuildinfo
+
+# LeetCode runtime last-good snapshot (bundled dataset is committed separately)
+backend/data/*.last-good.json
