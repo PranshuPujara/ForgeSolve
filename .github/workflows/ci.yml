@@ -1,0 +1,230 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "feat/**", "fix/**", "chore/**"]
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  # Cancel in-progress runs on the same branch so pushes don't queue up.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # JOB 1: Backend unit + acceptance tests
+  # Pure Node — no Docker, no network — fast and reliable.
+  # ─────────────────────────────────────────────────────────────
+  backend-tests:
+    name: Backend Tests (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ["20", "22"]
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Inject stub env so the service never tries to reach a real upstream.
+      # LEETCODE_USE_STATIC=false forces the live-API path, which the tests mock
+      # by injecting a stub LEETCODE_API_BASE_URL that will immediately fail and
+      # trigger the graceful static-fallback — exercising the error path too.
+      - name: Run backend test suite
+        run: npm run test:all
+        env:
+          NODE_ENV: test
+          LEETCODE_USE_STATIC: "false"
+          LEETCODE_API_BASE_URL: "http://localhost:19999" # nothing listening → tests the fallback path
+          CF_API_BASE: "https://codeforces.com/api"
+          CACHE_TTL_SECONDS: "60"
+          LEETCODE_CACHE_TTL_SECONDS: "60"
+          LEETCODE_USER_CACHE_TTL_SECONDS: "60"
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 2: Backend linting / structure checks
+  # Catches syntax errors, missing exports, and broken requires.
+  # ─────────────────────────────────────────────────────────────
+  backend-lint:
+    name: Backend Syntax & Structure
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # node --check catches syntax errors without executing any module code.
+      - name: Syntax-check all backend JS files
+        run: |
+          find . -name "*.js" \
+            -not -path "./node_modules/*" \
+            -not -name "*.min.js" \
+            -print0 | xargs -0 node --check
+          echo "All backend files are syntactically valid."
+
+      # Verify that the entry point and every required module can be resolved.
+      # We import just the top-level requires without starting the HTTP server.
+      - name: Verify module resolution
+        run: |
+          node -e "
+            require('dotenv').config();
+            require('./utils/filterEngine');
+            require('./utils/cache');
+            require('./utils/random');
+            require('./services/leetcodeService');
+            require('./services/codeforcesService');
+            require('./routes/problems');
+            require('./routes/codeforces');
+            require('./routes/leetcode');
+            require('./routes/health');
+            require('./routes/solve');
+            console.log('All modules resolved correctly.');
+          "
+        env:
+          NODE_ENV: test
+          LEETCODE_USE_STATIC: "false"
+          LEETCODE_API_BASE_URL: "http://localhost:19999"
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 3: Frontend production build
+  # Ensures the Vite build never silently breaks on push.
+  # ─────────────────────────────────────────────────────────────
+  frontend-build:
+    name: Frontend Production Build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (production)
+        run: npm run build
+        env:
+          # Stub so the build doesn't fail on missing env vars.
+          VITE_API_URL: "https://solveforge-backend.onrender.com"
+
+      - name: Verify build output exists
+        run: |
+          test -d dist || (echo "dist/ not produced" && exit 1)
+          test -f dist/index.html || (echo "dist/index.html missing" && exit 1)
+          echo "Build output verified."
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 4: Forge math unit tests (pure ESM, zero deps)
+  # Runs the geometry / physics / director tests shipped with the
+  # ForgeScene redesign.
+  # ─────────────────────────────────────────────────────────────
+  forge-unit-tests:
+    name: Forge Scene Unit Tests
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          # forge.test.mjs uses top-level await + dynamic import — needs Node ≥ 20.19 / 22
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run forge math tests
+        # forge.test.mjs is a self-contained test runner (no test framework dep)
+        run: node src/components/forge/forge.test.mjs
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 5: Security audit
+  # Flags high/critical vulnerabilities in backend deps only.
+  # Frontend audit is advisory-only (skipped on audit failures).
+  # ─────────────────────────────────────────────────────────────
+  security-audit:
+    name: Dependency Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Backend audit (fail on critical only)
+        working-directory: backend
+        # High-severity findings are in express/axios transitive deps (body-parser, proxy-addr, qs).
+        # We track them but only block CI on critical issues; high findings are logged as advisory.
+        run: |
+          npm audit --audit-level=critical --omit=dev || {
+            echo "⚠️  Critical vulnerabilities found — blocking CI."
+            exit 1
+          }
+          npm audit --audit-level=high --omit=dev || echo "⚠️  High-severity advisories present (non-blocking). Run 'npm audit fix' to resolve."
+
+      - name: Frontend audit (advisory only)
+        working-directory: frontend
+        run: npm audit --audit-level=critical --omit=dev || true
+
+  # ─────────────────────────────────────────────────────────────
+  # STATUS GATE: single job that depends on all others.
+  # PRs are blocked until this passes; branch protection uses
+  # "CI / All checks passed" as the required status check name.
+  # ─────────────────────────────────────────────────────────────
+  all-checks-passed:
+    name: All checks passed
+    needs:
+      - backend-tests
+      - backend-lint
+      - frontend-build
+      - forge-unit-tests
+      - security-audit
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check all jobs succeeded
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
+            echo "One or more jobs failed."
+            exit 1
+          fi
+          echo "All CI jobs passed."
