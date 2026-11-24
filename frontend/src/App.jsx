@@ -7,7 +7,8 @@ import { useUserHandle } from './hooks/useUserHandle';
 import { PlatformSelector } from './components/filters/PlatformSelector';
 import { DifficultySelector } from './components/filters/DifficultySelector';
 import { TagSelector } from './components/filters/TagSelector';
-import { FilterModeSelector } from './components/filters/FilterModeSelector';
+import { FilterModeSelector, filterModeLabel } from './components/filters/FilterModeSelector';
+import { FriendMatchNote } from './components/filters/FriendMatchNote';
 import { FriendsPanel } from './components/friends/FriendsPanel';
 import { HandlePanel } from './components/handle/HandlePanel';
 import { ProblemCard } from './components/problem/ProblemCard';
@@ -219,6 +220,7 @@ export default function App() {
     ...(platform === 'codeforces' ? { minRating, maxRating } : { difficulty }),
     filterMode: platform === 'codeforces' ? filterMode : 'none',
     friendHandles: platform === 'codeforces' ? friends : [],
+    ...(platform === 'codeforces' && userHandle.status === 'ok' ? { userHandle: userHandle.handle } : {}),
     smartMode: smartMode && platform === 'codeforces',
     lastRating: getLastRating(),
     ...(platform === 'codeforces' && userHandle.status === 'ok' && userHandle.solvedIds.size > 0
@@ -322,7 +324,7 @@ export default function App() {
       </Section>
       {platform === 'codeforces' && (
         <Section title="Filter Mode">
-          <FilterModeSelector value={filterMode} onChange={setFilterMode} disabled={!hasFriends} />
+          <FilterModeSelector value={filterMode} onChange={setFilterMode} disabled={!hasFriends} hasHandle={userHandle.status === 'ok'} />
         </Section>
       )}
       {platform === 'codeforces' && (
@@ -695,6 +697,7 @@ export default function App() {
                         handleLabel={rawHandle ? `@${rawHandle}` : null}
                         onNext={handlePick}
                       />
+                      <FriendMatchNote meta={meta} />
                       <ProblemCard
                         key={`${problem.id}-${histKey}`}
                         problem={problem} meta={meta}

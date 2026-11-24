@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { Zap, CalendarDays, AlertCircle, Flame, Target, Rocket, Shuffle, Hammer, CornerDownLeft } from 'lucide-react';
+import { filterModeLabel } from '../filters/FilterModeSelector';
 import { ForgeScene } from '../forge/ForgeScene';
 import { ArmoryRack } from '../forge/ArmoryRack';
 import { weaponFor } from '../forge/geometry';
@@ -59,7 +60,7 @@ export function ForgeConsole({
 
   const level = isCF ? (minRating === maxRating ? `=${minRating}` : `${minRating}–${maxRating}`) : (difficulty || null);
   const mods = [
-    filterMode !== 'none' && filterMode, smartMode && 'smart',
+    filterMode !== 'none' && filterModeLabel(filterMode), smartMode && 'smart',
     excludeActive && 'skip solved', onlyActive && 'only solved',
   ].filter(Boolean);
 

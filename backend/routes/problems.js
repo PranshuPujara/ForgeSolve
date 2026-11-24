@@ -4,9 +4,10 @@ const router  = express.Router();
 const { getAllProblems: getCFProblems }  = require('../services/codeforcesService');
 const { getAllProblems: getLCProblems }  = require('../services/leetcodeService');
 const { getAllProblems: getGFGProblems } = require('../services/gfgService');
-const { getFriendsData }                = require('../services/codeforcesService');
+const { getFriendsStatus }              = require('../services/friendsService');
 const { filterProblems }                = require('../utils/filterEngine');
 const { pickRandom }                    = require('../utils/random');
+const FP                                = require('../utils/friendPick');
 
 /* ── Helper: load problem pool by platform ─────── */
 async function loadProblems(platform) {
@@ -16,7 +17,9 @@ async function loadProblems(platform) {
   return null;
 }
 
-/* ── POST /pick — random problem matching filters ── */
+/* ── POST /pick — random problem matching filters (+ friend modes) ──
+   filterMode: none | catchup | solved | stuck   (legacy 'unsolved' = stuck)   — see utils/friendPick.js
+   userHandle (optional): the user's own CF handle; needed by `catchup` to hide what they already solved. */
 router.post('/pick', async (req, res, next) => {
   try {
     const {
@@ -29,6 +32,7 @@ router.post('/pick', async (req, res, next) => {
       smartMode = false,
       lastRating,
       ignoreFilterMode = false,
+      userHandle,
       // Codeforces user handle filtering (arrays of problem IDs)
       excludeUserSolved  = [],
       showOnlyUserSolved = [],
@@ -37,19 +41,36 @@ router.post('/pick', async (req, res, next) => {
       showOnlyUserSolvedSlugs = [],
     } = req.body;
 
-    // Load problem pool
     const problems = await loadProblems(platform);
     if (!problems) return res.status(400).json({ error: `Unknown platform: ${platform}` });
 
-    // Codeforces-only friend data
-    let solvedSet = new Set(), attemptedSet = new Set(), perProblem = {};
-    const activeMode = ignoreFilterMode ? 'none' : filterMode;
-    if (platform === 'codeforces' && friendHandles.length > 0 && activeMode !== 'none') {
-      const fd = await getFriendsData(friendHandles);
-      solvedSet = fd.solvedUnion; attemptedSet = fd.attemptedUnion; perProblem = fd.perProblem;
+    const mode = ignoreFilterMode ? 'none' : FP.normalizeMode(filterMode);
+    const wantsFriends = platform === 'codeforces' && mode !== 'none' && friendHandles.length > 0;
+
+    /* friend data: one entry per friend (solved / attempted), so "stuck" is judged per friend */
+    let index = null, mine = null, failed = [], needsHandle = false;
+    if (wantsFriends) {
+      const fs = await getFriendsStatus(friendHandles);
+      failed = fs.failed;
+      if (!fs.friends.length) {
+        return res.status(502).json({
+          friendsUnavailable: true,
+          failed,
+          error: "Couldn't read your friends' Codeforces activity right now. Try again in a minute, or pick without the friend filter.",
+        });
+      }
+      index = FP.buildIndex(fs.friends);
+      if (mode === 'catchup') {
+        mine = new Set(excludeUserSolved);                       // already sent by the client when "exclude solved" is on
+        if (userHandle) {
+          const me = await getFriendsStatus([userHandle]);
+          if (me.friends[0]) me.friends[0].solved.forEach((id) => mine.add(id));
+        }
+        if (mine.size === 0) needsHandle = true;                // can't tell what I solved → behaves like "friends solved"
+      }
     }
 
-    // Codeforces-only smart mode bump
+    /* smart mode bump */
     let effectiveMin = minRating, effectiveMax = maxRating;
     if (platform === 'codeforces') {
       if (smartMode && lastRating) {
@@ -57,80 +78,87 @@ router.post('/pick', async (req, res, next) => {
         effectiveMax = lastRating + 400;
       }
     } else {
-      // Non-CF platforms ignore rating and friend filters
       effectiveMin = undefined;
       effectiveMax = undefined;
     }
 
     const historySet = new Set(history);
-    let filterSet = new Set(), friendFilterMode = 'none';
-    if (platform === 'codeforces') {
-      if (activeMode === 'unsolved') { filterSet = attemptedSet; friendFilterMode = 'intersect'; }
-      else if (activeMode === 'solved') { filterSet = solvedSet; friendFilterMode = 'intersect'; }
-    }
-
-    // Build user-handle sets
-    const excludeSet   = new Set(excludeUserSolved);
-    const showOnlySet  = new Set(showOnlyUserSolved);
+    const excludeSet = new Set(excludeUserSolved);
+    const showOnlySet = new Set(showOnlyUserSolved);
     const excludeSlugsSet  = new Set(excludeUserSolvedSlugs);
     const showOnlySlugsSet = new Set(showOnlyUserSolvedSlugs);
+    const pad = (v, d) => (typeof v === 'number' ? v + d : v);
 
-    let filtered = filterProblems({
-      problems,
-      tags,
-      minRating: effectiveMin,
-      maxRating: effectiveMax,
-      difficulty,
-      filterSet,
-      friendFilterMode,
-      history: historySet,
-      excludeUserSolved: excludeSet,
-      showOnlyUserSolved: showOnlySet,
-      excludeUserSolvedSlugs: excludeSlugsSet,
-      showOnlyUserSolvedSlugs: showOnlySlugsSet,
-    });
-
-    // Friend-filtered no match → special response (Codeforces only)
-    const wasFriendFiltered = platform === 'codeforces' && (filterMode === 'unsolved' || filterMode === 'solved') && !ignoreFilterMode && friendHandles.length > 0;
-    if (filtered.length === 0 && wasFriendFiltered) {
-      return res.status(404).json({
-        noFriendMatch: true,
-        filterMode,
-        error: `No problems match your rating/tags AND the "${filterMode}" friend filter.`,
-      });
-    }
-
-    // Retry without history
-    let retriedWithoutHistory = false;
-    if (filtered.length === 0 && historySet.size > 0) {
-      retriedWithoutHistory = true;
-      filtered = filterProblems({
+    /* one query = the user's filters, optionally loosened; friend rule applied afterwards (filterEngine stays untouched) */
+    const run = (q) => {
+      const base = filterProblems({
         problems,
-        tags,
-        minRating: effectiveMin,
-        maxRating: effectiveMax,
+        tags: q.dropTags ? [] : tags,
+        minRating: pad(effectiveMin, -(q.ratingPad || 0)),
+        maxRating: pad(effectiveMax, q.ratingPad || 0),
         difficulty,
-        filterSet,
-        friendFilterMode,
-        history: new Set(),
+        filterSet: new Set(),
+        friendFilterMode: 'none',
+        history: q.ignoreHistory ? new Set() : historySet,
         excludeUserSolved: excludeSet,
         showOnlyUserSolved: showOnlySet,
         excludeUserSolvedSlugs: excludeSlugsSet,
         showOnlyUserSolvedSlugs: showOnlySlugsSet,
       });
+      return wantsFriends ? FP.applyMode(base, mode, index, mine) : base.map((problem) => ({ problem, count: 0 }));
+    };
+
+    let matches = run({}), applied = [];
+    if (matches.length === 0) {
+      const steps = FP.relaxSteps({
+        hasHistory: historySet.size > 0,
+        isCF: wantsFriends && platform === 'codeforces',
+        hasTags: wantsFriends && tags.length > 0,
+      });
+      let q = {};
+      for (let i = 0; i < steps.length && matches.length === 0; i++) {
+        q = steps[i].apply(q);
+        matches = run(q);
+        if (matches.length) applied = steps.slice(0, i + 1);
+      }
     }
 
-    if (filtered.length === 0) {
+    if (matches.length === 0) {
+      if (wantsFriends) {
+        return res.status(404).json({
+          noFriendMatch: true,
+          filterMode: mode,
+          failed,
+          error: `No problems match your filters AND the "${mode}" friend filter, even after loosening them.`,
+        });
+      }
       return res.status(404).json({
         error: 'No problems found matching your filters.',
-        suggestions: ['Broaden the rating/difficulty range', 'Remove some tag filters', 'Change or clear user filters'],
+        suggestions: ['Broaden the rating range', 'Remove some tag filters', 'Change the filter mode'],
       });
     }
 
-    const problem = pickRandom(filtered);
+    const chosen = wantsFriends ? FP.weightedPick(matches) : { problem: pickRandom(matches.map((m) => m.problem)) };
+    const problem = chosen.problem;
     res.json({
-      problem: { ...problem, friendsSolvedCount: perProblem[problem.id] || 0 },
-      meta: { totalMatched: filtered.length, retriedWithoutHistory, platform },
+      problem: {
+        ...problem,
+        friendsSolvedCount: index ? (index.solvedBy.get(problem.id) || 0) : 0,
+        friendsStuckCount:  index ? (index.stuckBy.get(problem.id) || 0) : 0,
+        friendsSolvedBy:    index ? (index.solvers.get(problem.id) || []).slice(0, 5) : [],
+      },
+      meta: {
+        totalMatched: matches.length,
+        platform,
+        retriedWithoutHistory: applied.some((s) => s.key === 'history'),
+        friend: wantsFriends ? {
+          mode,
+          relaxed: applied.map((s) => s.note),
+          message: FP.describeRelax(applied),
+          failed,
+          needsHandle,
+        } : undefined,
+      },
     });
   } catch (err) { next(err); }
 });
