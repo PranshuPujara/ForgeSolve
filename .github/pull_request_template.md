@@ -17,8 +17,10 @@ Fixes #(issue)
 - [ ] Codeforces-dependent features are gated behind `platform === 'codeforces'`
 
 ## Testing
+- [ ] Verified backend test suite: `npm test` or `npm run test:all` succeeds
+- [ ] Verified friend-pick test suite (if touching filters): `npm run test:friendpick`
 - [ ] Verified frontend production build: `npm run build` succeeds
-- [ ] Verified backend server starts and routes function: `npm run dev`
+- [ ] Verified forge tests (if touching forge scene): `node src/components/forge/forge.test.mjs`
 - [ ] Tested locally on browser
 
 ## Checklist
